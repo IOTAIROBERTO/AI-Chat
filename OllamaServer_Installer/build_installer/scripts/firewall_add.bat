@@ -1,0 +1,1 @@
+netsh advfirewall firewall add rule name="VR Manual Server" dir=in action=allow protocol=TCP localport=5000

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>VR AI Assistant - Admin Test Panel</title>
+    <style>
+        :root { --primary: #00d2ff; --bg: #0f0f0f; --card: #1e1e1e; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; display: flex; justify-content: center; padding: 20px; }
+        .panel { background: var(--card); padding: 25px; border-radius: 15px; width: 100%; max-width: 600px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        
+        /* Configuración de Red */
+        .config-bar { display: flex; gap: 10px; margin-bottom: 20px; background: #2a2a2a; padding: 10px; border-radius: 8px; }
+        input { background: #333; border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; }
+        .ip-input { flex: 2; }
+        .port-input { flex: 1; }
+
+        #recordBtn { 
+            width: 100%; padding: 25px; font-size: 1.2rem; font-weight: bold; border: none; 
+            border-radius: 10px; cursor: pointer; transition: 0.3s; 
+            background: #444; color: white; margin: 10px 0;
+        }
+        #recordBtn.active { background: #007bff; box-shadow: 0 0 15px #007bff; }
+        #recordBtn.recording { background: #ff4444; animation: pulse 1.5s infinite; }
+        
+        .results { background: #121212; padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); margin-top: 20px; min-height: 100px; }
+        .loader { display: none; width: 100%; height: 4px; background: #333; overflow: hidden; margin: 10px 0; }
+        .loader-bar { width: 40%; height: 100%; background: var(--primary); animation: load 2s infinite; position: relative; }
+        @keyframes load { from { left: -40%; } to { left: 100%; } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <h3>Configuración de Servidor</h3>
+        <div class="config-bar">
+            <input type="text" id="ipAddr" class="ip-input" value="192.168.1.69" placeholder="IP del Server">
+            <input type="text" id="port" class="port-input" value="5000" placeholder="Puerto">
+        </div>
+
+        <button id="recordBtn">1. ACTIVAR MICRÓFONO</button>
+        <div id="loader" class="loader"><div class="loader-bar"></div></div>
+        <div id="status" style="font-size: 0.8rem; color: #888; text-align: center;">Haz clic para iniciar el sistema de audio</div>
+
+        <div class="results" id="resultBox">Los resultados del manual aparecerán aquí...</div>
+    </div>
+
+    <script>
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let chunks = [];
+        let isSystemReady = false;
+
+        const recordBtn = document.getElementById('recordBtn');
+        const status = document.getElementById('status');
+        const resultBox = document.getElementById('resultBox');
+        const loader = document.getElementById('loader');
+
+        // Función para inicializar micrófono y mantenerlo activo
+        async function initAudio() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                isSystemReady = true;
+                recordBtn.innerText = "MANTENER PARA HABLAR";
+                recordBtn.classList.add('active');
+                status.innerText = "Micrófono conectado y persistente ✓";
+            } catch (err) {
+                alert("Error al acceder al micro: " + err);
+            }
+        }
+
+        recordBtn.onmousedown = () => {
+            if (!isSystemReady) {
+                initAudio();
+                return;
+            }
+            chunks = [];
+            mediaRecorder = new MediaRecorder(mediaStream);
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = sendData;
+            mediaRecorder.start();
+            recordBtn.classList.add('recording');
+            status.innerText = "Escuchando...";
+        };
+
+        recordBtn.onmouseup = () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                recordBtn.classList.remove('recording');
+            }
+        };
+
+        async function sendData() {
+            const ip = document.getElementById('ipAddr').value;
+            const port = document.getElementById('port').value;
+            const blob = new Blob(chunks, { type: 'audio/wav' });
+            const formData = new FormData();
+            formData.append('audio', blob, 'query.wav');
+
+            loader.style.display = 'block';
+            status.innerText = "Procesando en el servidor...";
+
+            try {
+                const response = await fetch(`http://${ip}:${port}/query_audio`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                resultBox.innerHTML = `
+                    <p><strong>Pregunta:</strong> ${data.transcription}</p>
+                    <p style="color:var(--primary)"><strong>IA:</strong> ${data.answer}</p>
+                    <p><small>Páginas: ${data.pages}</small></p>
+                `;
+            } catch (err) {
+                resultBox.innerText = "Error de conexión. Revisa la IP y el Puerto.";
+            } finally {
+                loader.style.display = 'none';
+                status.innerText = "Micrófono listo (Persistente)";
+            }
+        }
+    </script>
+</body>
+</html>
