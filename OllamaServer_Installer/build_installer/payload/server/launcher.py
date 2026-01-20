@@ -12,6 +12,8 @@ import subprocess
 import threading
 import socket
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import time
 from pathlib import Path
 import tkinter as tk
@@ -661,9 +663,10 @@ class ServerLauncher:
         try:
             if self.server_running:
                 response = requests.post(
-                    "http://localhost:5000/switch_model",
+                    "https://localhost:5000/switch_model",
                     json={"model_name": model_name},
-                    timeout=5
+                    timeout=5,
+                    verify=False
                 )
                 
                 if response.status_code == 200:
@@ -1028,9 +1031,10 @@ class ServerLauncher:
         def do_index():
             try:
                 response = requests.post(
-                    "http://localhost:5000/index",
+                    "https://localhost:5000/index",
                     json={"pdf_path": str(self.selected_pdf)},
-                    timeout=1800
+                    timeout=1800,
+                    verify=False
                 )
                 
                 if response.status_code == 200:
@@ -1105,7 +1109,7 @@ class ServerLauncher:
         self.log("🔍 Testing connection...")
         
         try:
-            response = requests.get("http://localhost:5000/health", timeout=5)
+            response = requests.get("https://localhost:5000/health", timeout=5, verify=False)
             if response.status_code == 200:
                 data = response.json()
                 self.log("✓ Server responding!")

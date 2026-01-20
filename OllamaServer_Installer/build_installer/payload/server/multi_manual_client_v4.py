@@ -6,12 +6,16 @@ Version: 4.0 - Visual duplicate prevention
 """
 
 import requests
+import urllib3
 import time
 import json
 from pathlib import Path
 from datetime import datetime
 
-SERVER_URL = "http://localhost:5000"
+# Suppress InsecureRequestWarning for self-signed certificates
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+SERVER_URL = "https://localhost:5000"
 
 # ANSI Colors for better visualization
 class Colors:
@@ -68,7 +72,7 @@ def list_manuals_detailed():
     print_header("INDEXED MANUALS")
     
     try:
-        response = requests.get(f"{SERVER_URL}/manuals")
+        response = requests.get(f"{SERVER_URL}/manuals", verify=False)
         data = response.json()
         
         if data['total_manuals'] == 0:
@@ -227,7 +231,8 @@ def index_single_manual(pdf_path, force_reindex=False):
                 "pdf_path": pdf_path,
                 "force_reindex": force_reindex
             },
-            timeout=1800  # 30 minutes
+            timeout=1800,  # 30 minutes
+            verify=False
         )
         
         if response.status_code == 200:
@@ -347,7 +352,7 @@ def index_batch_with_duplicate_check(pdf_paths):
         while True:
             time.sleep(2)
             
-            status_response = requests.get(f"{SERVER_URL}/index/status/{task_id}")
+            status_response = requests.get(f"{SERVER_URL}/index/status/{task_id}", verify=False)
             status = status_response.json()
             
             current_status = status['status']
@@ -419,7 +424,7 @@ def delete_manual(manual_name):
             return
         
         # Delete
-        response = requests.delete(f"{SERVER_URL}/manual/{manual_name}")
+        response = requests.delete(f"{SERVER_URL}/manual/{manual_name}", verify=False)
         
         if response.status_code == 200:
             data = response.json()

@@ -231,6 +231,115 @@ def check_port_available(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) != 0
 
+def ensure_ssl_certificates(cert_file='server.crt', key_file='server.key'):
+    """Generate self-signed SSL certificates if they don't exist"""
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        log_message("SSL certificates found.")
+        return True
+
+    log_message("Generating self-signed SSL certificates...")
+    
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        import datetime
+        import ipaddress
+        import socket
+
+        key = None
+        key_reused = False
+
+        # Try to load existing key to avoid permission errors
+        if os.path.exists(key_file):
+            try:
+                with open(key_file, "rb") as f:
+                    key = serialization.load_pem_private_key(
+                        f.read(),
+                        password=None
+                    )
+                key_reused = True
+                log_message("Reusing existing private key.")
+            except Exception as e:
+                log_message(f"Could not load existing key, generating new one: {e}", "WARN")
+                try:
+                    os.remove(key_file)
+                except:
+                    pass
+
+        # Generate key if not loaded
+        if not key:
+            key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+            )
+
+        # Get local IP
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        
+        # Build subject
+        subject = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"AI Training Server"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, u"Local Dev"),
+        ])
+
+        # Build SANs (Subject Alternative Names)
+        alt_names = [
+            x509.DNSName(u"localhost"),
+            x509.DNSName(u"127.0.0.1"),
+            x509.DNSName(hostname),
+        ]
+        try:
+            alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
+            alt_names.append(x509.IPAddress(ipaddress.ip_address("127.0.0.1")))
+        except ValueError:
+            pass
+
+        # Generate certificate
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            subject
+        ).public_key(
+            key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before(
+            datetime.datetime.now(datetime.timezone.utc)
+        ).not_valid_after(
+            # Valid for 10 years
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
+        ).add_extension(
+            x509.SubjectAlternativeName(alt_names),
+            critical=False,
+        ).sign(key, hashes.SHA256())
+
+        # Save private key
+        if not key_reused:
+            with open(key_file, "wb") as f:
+                f.write(key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption(),
+                ))
+
+        # Save certificate
+        with open(cert_file, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        log_message(f"SSL certificates generated: {cert_file}, {key_file}")
+        return True
+
+    except Exception as e:
+        log_message(f"Failed to generate SSL certificates: {e}", "ERROR")
+        log_message("Ensure 'cryptography' library is installed.", "WARN")
+        return False
+
+
 def print_banner():
     banner = """
 ==============================================================
@@ -971,9 +1080,23 @@ if __name__ == '__main__':
     log_message("- Voice query with language detection")
     
     if initialize_components():
-        log_message(f"Server starting on port {SERVER_PORT}...")
+        # SSL Setup
+        base_dir = Path(__file__).parent.absolute()
+        cert_file = str(base_dir / 'server.crt')
+        key_file = str(base_dir / 'server.key')
+        ssl_context = None
+        protocol = "http"
+        
+        if ensure_ssl_certificates(cert_file, key_file):
+            ssl_context = (cert_file, key_file)
+            protocol = "https"
+        else:
+            log_message("WARNING: SSL generation failed, falling back to HTTP", "WARN")
+
+        log_message(f"Server starting on {protocol}://0.0.0.0:{SERVER_PORT}...")
         log_message(f"Active model: {current_ollama_model}")
-        app.run(host='0.0.0.0', port=SERVER_PORT, threaded=True)
+        
+        app.run(host='0.0.0.0', port=SERVER_PORT, threaded=True, ssl_context=ssl_context)
     else:
         log_message("Failed to initialize components", "ERROR")
         sys.exit(1)
