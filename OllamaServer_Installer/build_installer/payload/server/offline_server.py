@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VR Manual Server - Multi-Manual Support
-Version: 3.0 - Enhanced with batch indexing
+VR Manual Server - Bilingual Edition (Spanish/English)
+Version: 4.1 - Multi-model with llama3.2:3b legacy support
 """
 
 import sys
 import os
-import io
 import json
 import tempfile
 import time
@@ -46,21 +45,99 @@ collection = None
 server_start_time = None
 
 # Multi-manual tracking
-indexed_manuals = {}  # {manual_name: {chunks: count, pages: count, indexed_at: timestamp}}
-indexing_queue = []  # List of files being indexed
-indexing_status = {}  # {task_id: {status, progress, current_file, total_files, etc}}
+indexed_manuals = {}
+indexing_queue = []
+indexing_status = {}
+
+# Multi-model support (BILINGUAL ONLY)
+current_ollama_model = None
+available_models = []
+model_lock = threading.Lock()
 
 # Configuration
 WHISPER_MODEL_SIZE = "base"
-OLLAMA_MODEL = "llama3.2:3b"
+DEFAULT_OLLAMA_MODEL = "qwen2.5:1.5b"  # NEW DEFAULT (replaces llama3.2:3b)
 SERVER_PORT = 5000
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 
 # Performance limits
-MAX_FILE_SIZE_MB = 100  # Increased from 50MB
-MAX_PAGES_PER_FILE = 1000  # Increased from 500 pages
+MAX_FILE_SIZE_MB = 100
+MAX_PAGES_PER_FILE = 1000
 MAX_TOTAL_CHUNKS = 50000
+
+# Config file
+CONFIG_FILE = Path(__file__).parent / "server_config.json"
+
+# ============================================================================
+# CONFIGURATION MANAGEMENT
+# ============================================================================
+
+def load_config():
+    """Load server configuration including current model"""
+    global current_ollama_model
+    
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                current_ollama_model = config.get('current_model', DEFAULT_OLLAMA_MODEL)
+                log_message(f"Loaded config: model = {current_ollama_model}")
+        else:
+            current_ollama_model = DEFAULT_OLLAMA_MODEL
+            save_config()
+    except Exception as e:
+        log_message(f"Error loading config: {e}, using default", "WARN")
+        current_ollama_model = DEFAULT_OLLAMA_MODEL
+
+def save_config():
+    """Save current configuration"""
+    try:
+        config = {
+            'current_model': current_ollama_model,
+            'last_updated': datetime.now().isoformat(),
+            'bilingual_mode': True,
+            'supported_languages': ['es', 'en']
+        }
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        log_message(f"Error saving config: {e}", "WARN")
+
+def get_available_models():
+    """Get list of available Ollama models"""
+    global available_models
+    
+    try:
+        import ollama
+        response = ollama.list()
+        
+        models = []
+        if hasattr(response, 'models'):
+            models = response.models
+        elif isinstance(response, dict):
+            models = response.get('models', [])
+            
+        available_models = []
+        for m in models:
+            if hasattr(m, 'model'):
+                available_models.append(m.model)
+            elif isinstance(m, dict):
+                # Try 'model' first, then 'name' (older versions)
+                available_models.append(m.get('model') or m.get('name'))
+                
+        # Filter out None values
+        available_models = [m for m in available_models if m]
+        
+        return available_models
+    except Exception as e:
+        log_message(f"Error getting models: {e}", "WARN")
+        return []
+
+def verify_model_available(model_name):
+    """Check if a model is available"""
+    models = get_available_models()
+    return model_name in models
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -81,16 +158,13 @@ def safe_print(text):
         print(repr(text))
 
 def get_file_size_mb(filepath):
-    """Get file size in MB"""
     return Path(filepath).stat().st_size / (1024 * 1024)
 
 def calculate_file_hash(filepath, algorithm='md5'):
-    """Calculate file hash for duplicate detection"""
     hash_func = hashlib.md5() if algorithm == 'md5' else hashlib.sha256()
     
     try:
         with open(filepath, 'rb') as f:
-            # Read in chunks to handle large files
             for chunk in iter(lambda: f.read(8192), b''):
                 hash_func.update(chunk)
         return hash_func.hexdigest()
@@ -99,18 +173,15 @@ def calculate_file_hash(filepath, algorithm='md5'):
         return None
 
 def check_manual_exists(manual_name):
-    """Check if a manual with this name is already indexed"""
     return manual_name in indexed_manuals
 
 def check_file_hash_exists(file_hash):
-    """Check if a file with this hash is already indexed"""
     for manual_info in indexed_manuals.values():
         if manual_info.get('file_hash') == file_hash:
             return manual_info.get('manual_name')
     return None
 
 def validate_pdf(filepath, check_duplicates=True):
-    """Validate PDF before indexing with duplicate detection"""
     if not Path(filepath).exists():
         return False, "File not found", None
     
@@ -121,15 +192,13 @@ def validate_pdf(filepath, check_duplicates=True):
     if size_mb > MAX_FILE_SIZE_MB:
         return False, f"File too large ({size_mb:.1f}MB > {MAX_FILE_SIZE_MB}MB)", None
     
-    # Calculate file hash for duplicate detection
     file_hash = None
     manual_name = Path(filepath).stem
     
     if check_duplicates:
-        # Check by name first
         if check_manual_exists(manual_name):
             existing_info = indexed_manuals[manual_name]
-            return False, f"Manual '{manual_name}' already indexed (at {existing_info['indexed_at']})", {
+            return False, f"Manual '{manual_name}' already indexed", {
                 'duplicate_type': 'name',
                 'existing_manual': manual_name,
                 'indexed_at': existing_info['indexed_at'],
@@ -137,13 +206,12 @@ def validate_pdf(filepath, check_duplicates=True):
                 'chunks': existing_info.get('chunks', 0)
             }
         
-        # Check by file hash (more robust)
         file_hash = calculate_file_hash(filepath)
         if file_hash:
             existing_manual = check_file_hash_exists(file_hash)
             if existing_manual:
                 existing_info = indexed_manuals[existing_manual]
-                return False, f"Same file already indexed as '{existing_manual}' (at {existing_info['indexed_at']})", {
+                return False, f"Same file already indexed as '{existing_manual}'", {
                     'duplicate_type': 'hash',
                     'existing_manual': existing_manual,
                     'indexed_at': existing_info['indexed_at'],
@@ -158,17 +226,26 @@ def validate_pdf(filepath, check_duplicates=True):
 # INITIALIZATION
 # ============================================================================
 
+def check_port_available(port):
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) != 0
+
 def print_banner():
     banner = """
 ==============================================================
-     VR MANUAL SERVER - MULTI-MANUAL SUPPORT v3.0
+   VR MANUAL SERVER - BILINGUAL EDITION v4.1
+   Spanish/English Support - Multi-Model
 ==============================================================
 """
     safe_print(banner)
 
 def initialize_components():
-    global whisper_model, chroma_client, collection
+    global whisper_model, chroma_client, collection, current_ollama_model
+    
     safe_print("\nInitializing components...\n")
+    
+    load_config()
     
     try:
         log_message("Initializing ChromaDB...")
@@ -187,7 +264,7 @@ def initialize_components():
         )
         collection = chroma_client.get_or_create_collection(
             name="manuals",
-            metadata={"description": "Multi-manual vector database"}
+            metadata={"description": "Bilingual manual database"}
         )
         
         log_message("ChromaDB initialized [OK]")
@@ -207,27 +284,47 @@ def initialize_components():
     try:
         log_message("Verifying Ollama...")
         import ollama
-        models = ollama.list()
-        log_message(f"Ollama model {OLLAMA_MODEL} verified [OK]")
+        
+        models = get_available_models()
+        log_message(f"Found {len(models)} Ollama models")
+        
+        if current_ollama_model not in models:
+            log_message(f"Configured model '{current_ollama_model}' not found", "WARN")
+            
+            # Try legacy model
+            if "llama3.2:3b" in models:
+                log_message(f"Using legacy model: llama3.2:3b")
+                current_ollama_model = "llama3.2:3b"
+                save_config()
+            elif DEFAULT_OLLAMA_MODEL in models:
+                log_message(f"Using default: {DEFAULT_OLLAMA_MODEL}")
+                current_ollama_model = DEFAULT_OLLAMA_MODEL
+                save_config()
+            elif models:
+                log_message(f"Using first available: {models[0]}")
+                current_ollama_model = models[0]
+                save_config()
+            else:
+                log_message("No models available!", "ERROR")
+                return False
+        
+        log_message(f"Active model: {current_ollama_model} [OK]")
+        
     except Exception as e:
         log_message(f"Ollama verification failed: {str(e)}", "ERROR")
         return False
     
-    # Load existing manuals metadata
     load_manuals_metadata()
     
     return True
 
 def load_manuals_metadata():
-    """Load information about already indexed manuals"""
     global indexed_manuals
     
     try:
-        # Get all documents with their metadata
         results = collection.get(include=['metadatas'])
         
         if results and results['ids']:
-            # Group by manual_name
             for metadata in results['metadatas']:
                 manual_name = metadata.get('manual_name', 'unknown')
                 if manual_name not in indexed_manuals:
@@ -244,21 +341,14 @@ def load_manuals_metadata():
                 if 'page' in metadata:
                     indexed_manuals[manual_name]['pages'].add(metadata['page'])
             
-            # Convert sets to counts and ensure pages is always a number
             for manual_name in indexed_manuals:
                 page_set = indexed_manuals[manual_name]['pages']
-                # CRITICAL FIX: Ensure pages is always an integer, never undefined
                 indexed_manuals[manual_name]['pages'] = len(page_set) if page_set else 0
                 
-                # Ensure file_size_mb is a number
                 if not isinstance(indexed_manuals[manual_name].get('file_size_mb'), (int, float)):
                     indexed_manuals[manual_name]['file_size_mb'] = 0
             
             log_message(f"Loaded {len(indexed_manuals)} existing manuals")
-            
-            # Log details for debugging
-            for name, info in indexed_manuals.items():
-                log_message(f"  - {name}: {info['chunks']} chunks, {info['pages']} pages")
     except Exception as e:
         log_message(f"Error loading manuals metadata: {str(e)}", "WARN")
 
@@ -267,7 +357,6 @@ def load_manuals_metadata():
 # ============================================================================
 
 def create_chunks(text, page_num, manual_name, file_path=None, file_size_mb=0, file_hash=''):
-    """Create overlapping chunks from text with complete metadata"""
     chunks = []
     start = 0
     chunk_id = 0
@@ -296,27 +385,22 @@ def create_chunks(text, page_num, manual_name, file_path=None, file_size_mb=0, f
     return chunks
 
 def index_single_manual(pdf_path, task_id=None, callback=None, force_reindex=False):
-    """Index a single manual with progress tracking and duplicate detection"""
     try:
         manual_name = Path(pdf_path).stem
         
-        # Update status
         if task_id:
             indexing_status[task_id]['current_file'] = manual_name
             indexing_status[task_id]['status'] = 'processing'
         
         log_message(f"Indexing: {manual_name}")
         
-        # Validate PDF with duplicate detection
         valid, msg, file_hash = validate_pdf(pdf_path, check_duplicates=not force_reindex)
         if not valid:
-            # Return the duplicate info if available
-            if isinstance(file_hash, dict):  # This is duplicate_info
+            if isinstance(file_hash, dict):
                 raise ValueError(f"Duplicate detected: {msg}")
             else:
                 raise ValueError(msg)
         
-        # Read PDF
         from PyPDF2 import PdfReader
         reader = PdfReader(pdf_path)
         total_pages = len(reader.pages)
@@ -326,12 +410,9 @@ def index_single_manual(pdf_path, task_id=None, callback=None, force_reindex=Fal
         
         log_message(f"Processing {total_pages} pages...")
         
-        # Get file metadata for chunks
         file_size_mb = get_file_size_mb(pdf_path)
-        
         all_chunks = []
         
-        # Process each page
         for page_num, page in enumerate(reader.pages, start=1):
             text = page.extract_text()
             
@@ -346,24 +427,19 @@ def index_single_manual(pdf_path, task_id=None, callback=None, force_reindex=Fal
                 )
                 all_chunks.extend(page_chunks)
             
-            # Update progress
             progress = int((page_num / total_pages) * 100)
             if task_id:
                 indexing_status[task_id]['progress'] = progress
-                indexing_status[task_id]['current_page'] = page_num
-                indexing_status[task_id]['total_pages'] = total_pages
             
             if callback:
                 callback(progress, page_num, total_pages)
         
-        # Check total chunks limit
         current_total = collection.count()
         if current_total + len(all_chunks) > MAX_TOTAL_CHUNKS:
             raise ValueError(
                 f"Would exceed chunk limit ({current_total + len(all_chunks)} > {MAX_TOTAL_CHUNKS})"
             )
         
-        # Add to ChromaDB
         log_message(f"Adding {len(all_chunks)} chunks to database...")
         
         collection.add(
@@ -372,7 +448,6 @@ def index_single_manual(pdf_path, task_id=None, callback=None, force_reindex=Fal
             metadatas=[c['metadata'] for c in all_chunks]
         )
         
-        # Update indexed manuals
         indexed_manuals[manual_name] = {
             'chunks': len(all_chunks),
             'pages': total_pages,
@@ -401,7 +476,6 @@ def index_single_manual(pdf_path, task_id=None, callback=None, force_reindex=Fal
         }
 
 def index_multiple_manuals_batch(pdf_paths, task_id):
-    """Index multiple manuals sequentially with progress tracking"""
     total_files = len(pdf_paths)
     results = []
     
@@ -423,7 +497,6 @@ def index_multiple_manuals_batch(pdf_paths, task_id):
         indexing_status[task_id]['results'].append(result)
         indexing_status[task_id]['completed_files'] = i
         
-        # Overall progress
         overall_progress = int((i / total_files) * 100)
         indexing_status[task_id]['progress'] = overall_progress
     
@@ -438,13 +511,15 @@ def index_multiple_manuals_batch(pdf_paths, task_id):
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
     total_chunks = collection.count() if collection else 0
     
     return jsonify({
         'status': 'healthy',
         'whisper_loaded': whisper_model is not None,
-        'ollama_model': OLLAMA_MODEL,
+        'ollama_model': current_ollama_model,
+        'available_models': get_available_models(),
+        'bilingual_mode': True,
+        'supported_languages': ['es', 'en'],
         'indexed_manuals': len(indexed_manuals),
         'total_chunks': total_chunks,
         'max_chunks': MAX_TOTAL_CHUNKS,
@@ -452,9 +527,51 @@ def health_check():
         'timestamp': get_timestamp()
     })
 
+@app.route('/models', methods=['GET'])
+def list_models():
+    models = get_available_models()
+    return jsonify({
+        'success': True,
+        'current_model': current_ollama_model,
+        'available_models': models,
+        'total_models': len(models)
+    })
+
+@app.route('/switch_model', methods=['POST'])
+def switch_model():
+    global current_ollama_model
+    
+    try:
+        data = request.get_json()
+        new_model = data.get('model_name')
+        
+        if not new_model:
+            return jsonify({'error': 'No model_name provided'}), 400
+        
+        if not verify_model_available(new_model):
+            return jsonify({
+                'error': f"Model '{new_model}' not available",
+                'available_models': get_available_models()
+            }), 404
+        
+        with model_lock:
+            old_model = current_ollama_model
+            current_ollama_model = new_model
+            save_config()
+        
+        log_message(f"Model switched: {old_model} → {new_model}")
+        
+        return jsonify({
+            'success': True,
+            'previous_model': old_model,
+            'current_model': current_ollama_model,
+            'message': f"Successfully switched to {new_model}"
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 @app.route('/manuals', methods=['GET'])
 def list_manuals():
-    """List all indexed manuals"""
     return jsonify({
         'success': True,
         'manuals': indexed_manuals,
@@ -464,7 +581,6 @@ def list_manuals():
 
 @app.route('/check_manual', methods=['POST'])
 def check_manual():
-    """Check if a manual already exists (by name or file hash)"""
     try:
         data = request.get_json()
         pdf_path = data.get('pdf_path')
@@ -477,10 +593,8 @@ def check_manual():
         
         manual_name = Path(pdf_path).stem
         
-        # Check by name
         exists_by_name = check_manual_exists(manual_name)
         
-        # Check by hash
         file_hash = calculate_file_hash(pdf_path)
         existing_manual_by_hash = check_file_hash_exists(file_hash) if file_hash else None
         
@@ -508,7 +622,6 @@ def check_manual():
 
 @app.route('/index', methods=['POST'])
 def index_manual():
-    """Index a single manual with duplicate detection"""
     try:
         data = request.get_json()
         pdf_path = data.get('pdf_path')
@@ -517,22 +630,18 @@ def index_manual():
         if not pdf_path:
             return jsonify({'error': 'No pdf_path provided'}), 400
         
-        # If not forcing reindex, check for duplicates first
         if not force_reindex:
             manual_name = Path(pdf_path).stem
             
-            # Check by name
             if check_manual_exists(manual_name):
                 manual_info = indexed_manuals[manual_name]
                 return jsonify({
                     'error': 'Duplicate manual',
                     'duplicate': True,
                     'existing_manual': manual_name,
-                    'manual_info': manual_info,
-                    'message': f"Manual '{manual_name}' is already indexed. Use force_reindex=true to re-index."
-                }), 409  # 409 Conflict
+                    'manual_info': manual_info
+                }), 409
             
-            # Check by hash
             file_hash = calculate_file_hash(pdf_path)
             if file_hash:
                 existing_manual = check_file_hash_exists(file_hash)
@@ -542,21 +651,18 @@ def index_manual():
                         'error': 'Duplicate file',
                         'duplicate': True,
                         'existing_manual': existing_manual,
-                        'manual_info': manual_info,
-                        'message': f"Same file already indexed as '{existing_manual}'. Use force_reindex=true to re-index."
+                        'manual_info': manual_info
                     }), 409
         
-        # If forcing reindex, delete existing manual first
         if force_reindex:
             manual_name = Path(pdf_path).stem
             if check_manual_exists(manual_name):
-                # Delete old version
                 try:
                     results = collection.get(where={"manual_name": manual_name})
                     if results and results['ids']:
                         collection.delete(ids=results['ids'])
                     del indexed_manuals[manual_name]
-                    log_message(f"Deleted old version of '{manual_name}' for re-indexing")
+                    log_message(f"Deleted old version of '{manual_name}'")
                 except Exception as e:
                     log_message(f"Error deleting old manual: {e}", "WARN")
         
@@ -572,7 +678,6 @@ def index_manual():
 
 @app.route('/index/batch', methods=['POST'])
 def index_batch():
-    """Index multiple manuals - async with task tracking"""
     try:
         data = request.get_json()
         pdf_paths = data.get('pdf_paths', [])
@@ -583,10 +688,8 @@ def index_batch():
         if not isinstance(pdf_paths, list):
             return jsonify({'error': 'pdf_paths must be a list'}), 400
         
-        # Create task ID
         task_id = f"batch_{int(time.time())}"
         
-        # Start indexing in background thread
         thread = threading.Thread(
             target=index_multiple_manuals_batch,
             args=(pdf_paths, task_id)
@@ -596,8 +699,7 @@ def index_batch():
         return jsonify({
             'success': True,
             'task_id': task_id,
-            'total_files': len(pdf_paths),
-            'message': 'Batch indexing started'
+            'total_files': len(pdf_paths)
         }), 202
         
     except Exception as e:
@@ -605,7 +707,6 @@ def index_batch():
 
 @app.route('/index/status/<task_id>', methods=['GET'])
 def get_indexing_status(task_id):
-    """Get status of batch indexing task"""
     if task_id not in indexing_status:
         return jsonify({'error': 'Task not found'}), 404
     
@@ -617,15 +718,11 @@ def get_indexing_status(task_id):
 
 @app.route('/manual/<manual_name>', methods=['DELETE'])
 def delete_manual(manual_name):
-    """Delete a specific manual and its chunks"""
     try:
         if manual_name not in indexed_manuals:
             return jsonify({'error': 'Manual not found'}), 404
         
-        # Get all chunk IDs for this manual
-        results = collection.get(
-            where={"manual_name": manual_name}
-        )
+        results = collection.get(where={"manual_name": manual_name})
         
         if results and results['ids']:
             collection.delete(ids=results['ids'])
@@ -645,53 +742,44 @@ def delete_manual(manual_name):
 
 @app.route('/clear_all', methods=['POST'])
 def clear_all_database():
-    """Clear ALL indexed manuals and reset database - DANGER!"""
     try:
-        log_message("⚠️ WARNING: Clearing entire database...")
+        log_message("⚠️ Clearing entire database...")
         
-        # Get count before deleting
         results = collection.get()
         total_chunks = len(results['ids']) if results and results['ids'] else 0
         total_manuals = len(indexed_manuals)
         
-        # Delete all chunks
         if results and results['ids']:
             collection.delete(ids=results['ids'])
         
-        # Clear indexed manuals dictionary
         indexed_manuals.clear()
         
-        log_message(f"✓ Database cleared: {total_chunks} chunks, {total_manuals} manuals deleted")
+        log_message(f"✓ Database cleared: {total_chunks} chunks, {total_manuals} manuals")
         
         return jsonify({
             'success': True,
-            'message': 'Database cleared successfully',
             'chunks_deleted': total_chunks,
             'manuals_deleted': total_manuals
         })
         
     except Exception as e:
-        log_message(f"✗ Error clearing database: {str(e)}", "ERROR")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/query', methods=['POST'])
 def query_text():
-    """Text query with manual filtering"""
     try:
         data = request.get_json()
         query = data.get('query', '')
-        manual_filter = data.get('manual_name')  # Optional: filter by manual
+        manual_filter = data.get('manual_name')
         n_results = data.get('n_results', 3)
         
         if not query:
             return jsonify({'error': 'No query provided'}), 400
         
-        # Build where clause
         where_clause = {}
         if manual_filter:
             where_clause = {"manual_name": manual_filter}
         
-        # Query ChromaDB
         results = collection.query(
             query_texts=[query],
             n_results=n_results,
@@ -701,11 +789,11 @@ def query_text():
         if not results['documents'][0]:
             return jsonify({
                 'success': True,
-                'answer': 'No relevant information found in the indexed manuals.',
-                'sources': []
+                'answer': 'No relevant information found.',
+                'sources': [],
+                'model_used': current_ollama_model
             })
         
-        # Build context with page references
         context_parts = []
         sources = []
         page_references = []
@@ -714,87 +802,74 @@ def query_text():
             context_parts.append(doc)
             manual = metadata['manual_name']
             page = metadata['page']
-            sources.append({
-                'manual': manual,
-                'page': page
-            })
+            sources.append({'manual': manual, 'page': page})
             page_references.append(f"(Manual: {manual}, Página: {page})")
         
         context = '\n\n'.join(context_parts)
         
-        # Generate answer with Ollama
         import ollama
         
-        # IMPROVED PROMPT: Only answer from manual context, refuse general knowledge
-        prompt = f"""Eres un asistente técnico especializado EXCLUSIVAMENTE en los manuales proporcionados.
+        with model_lock:
+            active_model = current_ollama_model
+        
+        prompt = f"""Eres un asistente técnico bilingüe (Español/English) especializado EXCLUSIVAMENTE en los manuales proporcionados.
 
 REGLAS ESTRICTAS:
-1. SOLO puedes responder preguntas basándote en el contexto del manual proporcionado
-2. Si la pregunta NO está relacionada con el contenido del manual, debes responder EXACTAMENTE:
-   "Lo siento, no tengo información sobre eso en los manuales indexados. Solo puedo responder preguntas sobre el contenido de los manuales técnicos disponibles."
-3. NO uses conocimiento general ni información externa
-4. NO inventes información
-5. Responde en el MISMO IDIOMA que usa el usuario
-6. IMPORTANTE: Al final de tu respuesta, SIEMPRE menciona las páginas de donde obtuviste la información usando el formato:
-   "Fuente: [Manual], página [número]" o "Fuentes: [Manual], páginas [números]"
+1. SOLO responde basándote en el contexto del manual
+2. Si NO está en el manual, responde: "Lo siento, no tengo información sobre eso en los manuales indexados."
+3. NO uses conocimiento general externo
+4. Responde en el MISMO IDIOMA que usa el usuario
+5. SIEMPRE menciona las páginas al final: "Fuente: [Manual], página [número]"
 
-Contexto del manual con referencias:
-{context}
+Contexto: {context}
 
-Referencias de páginas: {', '.join(page_references)}
+Referencias: {', '.join(page_references)}
 
-Pregunta del usuario: {query}
+Pregunta: {query}
 
-Respuesta (solo si está en el contexto del manual, incluye las páginas al final):"""
+Respuesta (solo del contexto, incluye páginas):"""
         
-        response = ollama.generate(model=OLLAMA_MODEL, prompt=prompt)
+        log_message(f"Query using model: {active_model}")
+        response = ollama.generate(model=active_model, prompt=prompt)
         
         return jsonify({
             'success': True,
             'answer': response['response'].strip(),
             'sources': sources,
-            'manuals_used': list(set(s['manual'] for s in sources))
+            'manuals_used': list(set(s['manual'] for s in sources)),
+            'model_used': active_model
         })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
 @app.route('/query_audio', methods=['POST'])
 def query_audio():
-    """Voice query with transcription"""
     try:
         if 'audio' not in request.files:
             return jsonify({'error': 'No audio file'}), 400
         
         audio_file = request.files['audio']
-        manual_filter = request.form.get('manual_name')  # Optional
+        manual_filter = request.form.get('manual_name')
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
             audio_file.save(tmp.name)
             tmp_path = tmp.name
         
         try:
-            # Transcribe audio
             segments, info = whisper_model.transcribe(tmp_path, beam_size=5)
             query = ' '.join([s.text for s in segments]).strip()
             
             if not query:
                 return jsonify({'error': 'No speech detected'}), 400
             
-            # Detect language from transcription
             detected_language = info.language if hasattr(info, 'language') else 'es'
-            language_name = {
-                'en': 'English',
-                'es': 'Spanish',
-                'fr': 'French',
-                'de': 'German',
-                'it': 'Italian',
-                'pt': 'Portuguese'
-            }.get(detected_language, 'Spanish')
             
-            log_message(f"Detected language: {language_name} ({detected_language})")
-            
-            # Use same query logic as text query
             where_clause = {"manual_name": manual_filter} if manual_filter else None
             
             results = collection.query(
@@ -811,7 +886,6 @@ def query_audio():
                     'sources': []
                 })
             
-            # Build context with page references
             context_parts = []
             sources = []
             page_references = []
@@ -820,68 +894,60 @@ def query_audio():
                 context_parts.append(doc)
                 manual = metadata['manual_name']
                 page = metadata['page']
-                sources.append({
-                    'manual': manual,
-                    'page': page
-                })
+                sources.append({'manual': manual, 'page': page})
                 page_references.append(f"(Manual: {manual}, Página: {page})")
             
             context = '\n\n'.join(context_parts)
             
             import ollama
             
-            # Create language-specific prompt
+            with model_lock:
+                active_model = current_ollama_model
+            
             if detected_language == 'en':
-                prompt = f"""You are a technical assistant specialized EXCLUSIVELY in the provided manuals.
+                prompt = f"""You are a bilingual technical assistant (Spanish/English) specialized EXCLUSIVELY in the provided manuals.
 
 STRICT RULES:
-1. You can ONLY answer questions based on the provided manual context
-2. If the question is NOT related to the manual content, you must respond EXACTLY:
-   "I'm sorry, I don't have information about that in the indexed manuals. I can only answer questions about the content of the available technical manuals."
-3. DO NOT use general knowledge or external information
-4. DO NOT make up information
-5. IMPORTANT: At the end of your response, ALWAYS mention the pages where you got the information using the format:
-   "Source: [Manual], page [number]" or "Sources: [Manual], pages [numbers]"
+1. ONLY answer based on the manual context
+2. If NOT in manual, respond: "I'm sorry, I don't have information about that in the indexed manuals."
+3. DO NOT use external general knowledge
+4. IMPORTANT: Always mention pages at the end: "Source: [Manual], page [number]"
 
-Manual context with references:
-{context}
+Manual context: {context}
 
 Page references: {', '.join(page_references)}
 
 User question: {query}
 
-Answer (only if in manual context, include pages at the end):"""
+Answer (only from context, include pages):"""
             else:
-                # Spanish or other languages
-                prompt = f"""Eres un asistente técnico especializado EXCLUSIVAMENTE en los manuales proporcionados.
+                prompt = f"""Eres un asistente técnico bilingüe (Español/English) especializado EXCLUSIVAMENTE en los manuales proporcionados.
 
 REGLAS ESTRICTAS:
-1. SOLO puedes responder preguntas basándote en el contexto del manual proporcionado
-2. Si la pregunta NO está relacionada con el contenido del manual, debes responder EXACTAMENTE:
-   "Lo siento, no tengo información sobre eso en los manuales indexados. Solo puedo responder preguntas sobre el contenido de los manuales técnicos disponibles."
-3. NO uses conocimiento general ni información externa
-4. NO inventes información
-5. Responde en el MISMO IDIOMA que usa el usuario
-6. IMPORTANTE: Al final de tu respuesta, SIEMPRE menciona las páginas de donde obtuviste la información usando el formato:
-   "Fuente: [Manual], página [número]" o "Fuentes: [Manual], páginas [números]"
+1. SOLO responde basándote en el contexto del manual
+2. Si NO está en el manual, responde: "Lo siento, no tengo información sobre eso en los manuales indexados."
+3. NO uses conocimiento general externo
+4. Responde en el MISMO IDIOMA que usa el usuario
+5. IMPORTANTE: Siempre menciona las páginas al final: "Fuente: [Manual], página [número]"
 
-Contexto del manual con referencias:
-{context}
+Contexto del manual: {context}
 
 Referencias de páginas: {', '.join(page_references)}
 
 Pregunta del usuario: {query}
 
-Respuesta (solo si está en el contexto del manual, incluye las páginas al final):"""
+Respuesta (solo del contexto, incluye páginas):"""
             
-            response = ollama.generate(model=OLLAMA_MODEL, prompt=prompt)
+            response = ollama.generate(model=active_model, prompt=prompt)
             
             return jsonify({
                 'success': True,
                 'transcription': query,
                 'answer': response['response'].strip(),
                 'sources': sources,
-                'manuals_used': list(set(s['manual'] for s in sources))
+                'manuals_used': list(set(s['manual'] for s in sources)),
+                'model_used': active_model,
+                'detected_language': detected_language
             })
             
         finally:
@@ -898,15 +964,15 @@ Respuesta (solo si está en el contexto del manual, incluye las páginas al fina
 if __name__ == '__main__':
     print_banner()
     
-    log_message("Multi-Manual Support Features:")
-    log_message("- Single manual indexing")
-    log_message("- Batch indexing with progress tracking")
-    log_message("- Per-manual query filtering")
-    log_message("- Manual deletion")
-    log_message("- Performance monitoring")
+    log_message("Bilingual Edition Features:")
+    log_message("- Spanish/English native support")
+    log_message("- Multi-model hot-swapping")
+    log_message("- Default: qwen2.5:1.5b (legacy: llama3.2:3b)")
+    log_message("- Voice query with language detection")
     
     if initialize_components():
         log_message(f"Server starting on port {SERVER_PORT}...")
+        log_message(f"Active model: {current_ollama_model}")
         app.run(host='0.0.0.0', port=SERVER_PORT, threaded=True)
     else:
         log_message("Failed to initialize components", "ERROR")
