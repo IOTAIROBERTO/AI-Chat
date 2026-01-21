@@ -880,7 +880,8 @@ def query_text():
         data = request.get_json()
         query = data.get('query', '')
         manual_filter = data.get('manual_name')
-        n_results = data.get('n_results', 3)
+        # Aumentamos n_results de 3 a 6 para capturar más contexto
+        n_results = data.get('n_results', 7) 
         
         if not query:
             return jsonify({'error': 'No query provided'}), 400
@@ -895,10 +896,10 @@ def query_text():
             where=where_clause if where_clause else None
         )
         
-        if not results['documents'][0]:
+        if not results['documents'] or not results['documents'][0]:
             return jsonify({
                 'success': True,
-                'answer': 'No relevant information found.',
+                'answer': 'No encontré información relevante en los manuales.',
                 'sources': [],
                 'model_used': current_ollama_model
             })
@@ -917,29 +918,41 @@ def query_text():
         context = '\n\n'.join(context_parts)
         
         import ollama
-        
         with model_lock:
             active_model = current_ollama_model
         
-        prompt = f"""Eres un asistente técnico bilingüe (Español/English) especializado EXCLUSIVAMENTE en los manuales proporcionados.
+        # PROMPT OPTIMIZADO: Más permisivo y enfocado en síntesis
+        prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
 
-REGLAS ESTRICTAS:
-1. SOLO responde basándote en el contexto del manual
-2. Si NO está en el manual, responde: "Lo siento, no tengo información sobre eso en los manuales indexados."
-3. NO uses conocimiento general externo
-4. Responde en el MISMO IDIOMA que usa el usuario
-5. SIEMPRE menciona las páginas al final: "Fuente: [Manual], página [número]"
+INSTRUCCIONES:
+1. Si la entrada del usuario es un término general (ej. "{query}"), resume de qué trata ese componente o tema según el contexto.
+2. Si el usuario hace una pregunta específica, responde con detalle paso a paso.
+3. Si el contexto contiene información pero no responde directamente a una pregunta implícita, ofrece un resumen de lo hallado.
+4. Responde siempre en el idioma del usuario.
 
-Contexto: {context}
+CONTEXTO DE LOS MANUALES:
+{context}
 
-Referencias: {', '.join(page_references)}
+REFERENCIAS DISPONIBLES:
+{', '.join(page_references)}
 
-Pregunta: {query}
+PREGUNTA DEL USUARIO:
+{query}
 
-Respuesta (solo del contexto, incluye páginas):"""
+RESPUESTA (Basada en el contexto anterior):"""
         
         log_message(f"Query using model: {active_model}")
-        response = ollama.generate(model=active_model, prompt=prompt)
+        
+        # Añadimos opciones para evitar respuestas cortas/negativas
+        response = ollama.generate(
+            model=active_model, 
+            prompt=prompt,
+            options={
+                "temperature": 0.3, # Equilibrio entre precisión y fluidez
+                "num_ctx": 4096,    # Ventana de contexto amplia
+                "top_p": 0.9
+            }
+        )
         
         return jsonify({
             'success': True,
@@ -950,6 +963,7 @@ Respuesta (solo del contexto, incluye páginas):"""
         })
         
     except Exception as e:
+        log_message(f"Error in query: {e}", "ERROR")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1030,13 +1044,13 @@ User question: {query}
 
 Answer (only from context, include pages):"""
             else:
-                prompt = f"""Eres un asistente técnico bilingüe (Español/English) especializado EXCLUSIVAMENTE en los manuales proporcionados.
+                prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
 
-REGLAS ESTRICTAS:
-1. SOLO responde basándote en el contexto del manual
-2. Si NO está en el manual, responde: "Lo siento, no tengo información sobre eso en los manuales indexados."
-3. NO uses conocimiento general externo
-4. Responde en el MISMO IDIOMA que usa el usuario
+INSTRUCCIONES:
+1. Si la entrada del usuario es un término general (ej. "{query}"), resume de qué trata ese componente o tema según el contexto.
+2. Si el usuario hace una pregunta específica, responde con detalle paso a paso.
+3. Si el contexto contiene información pero no responde directamente a una pregunta implícita, ofrece un resumen de lo hallado.
+4. Responde siempre en el idioma del usuario.
 5. IMPORTANTE: Siempre menciona las páginas al final: "Fuente: [Manual], página [número]"
 
 Contexto del manual: {context}

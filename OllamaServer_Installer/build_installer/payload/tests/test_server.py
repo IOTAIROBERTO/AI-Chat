@@ -8,11 +8,13 @@ Version 2.0
 import sys
 import time
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import json
 from pathlib import Path
 
 # Server configuration
-SERVER_URL = "http://localhost:5000"
+SERVER_URL = "https://localhost:5000"
 TIMEOUT = 10
 
 class Colors:
@@ -60,7 +62,7 @@ def test_health_check():
     print_test("Health Check")
     
     try:
-        response = requests.get(f"{SERVER_URL}/health", timeout=TIMEOUT)
+        response = requests.get(f"{SERVER_URL}/health", timeout=TIMEOUT, verify=False)
         
         if response.status_code == 200:
             data = response.json()
@@ -85,17 +87,17 @@ def test_health_check():
         return False
 
 def test_simple_endpoint():
-    """Test 2: Simple test endpoint"""
-    print_test("Simple Endpoint")
+    """Test 2: Models Endpoint (Simple)"""
+    print_test("Models Endpoint")
     
     try:
-        response = requests.get(f"{SERVER_URL}/test", timeout=TIMEOUT)
+        response = requests.get(f"{SERVER_URL}/models", timeout=TIMEOUT, verify=False)
         
         if response.status_code == 200:
             data = response.json()
             print_pass()
-            print_info(f"  Message: {data.get('message')}")
-            print_info(f"  Version: {data.get('version')}")
+            print_info(f"  Current Model: {data.get('current_model')}")
+            print_info(f"  Total Models: {data.get('total_models')}")
             return True
         else:
             print_fail(f"Status code: {response.status_code}")
@@ -123,7 +125,8 @@ def test_index_manual(pdf_path=None):
         response = requests.post(
             f"{SERVER_URL}/index",
             json={"pdf_path": str(pdf_path)},
-            timeout=300  # 5 minutes for large PDFs
+            timeout=300,  # 5 minutes for large PDFs
+            verify=False
         )
         
         if response.status_code == 200:
@@ -151,7 +154,8 @@ def test_text_query(query="What is this manual about?"):
         response = requests.post(
             f"{SERVER_URL}/query",
             json={"query": query},
-            timeout=30
+            timeout=30,
+            verify=False
         )
         
         if response.status_code == 200:
@@ -178,7 +182,7 @@ def test_response_time():
     
     try:
         start = time.time()
-        response = requests.get(f"{SERVER_URL}/health", timeout=TIMEOUT)
+        response = requests.get(f"{SERVER_URL}/health", timeout=TIMEOUT, verify=False)
         elapsed = time.time() - start
         
         if response.status_code == 200:
@@ -207,7 +211,7 @@ def test_error_handling():
     
     try:
         # Test with invalid endpoint
-        response = requests.get(f"{SERVER_URL}/nonexistent", timeout=TIMEOUT)
+        response = requests.get(f"{SERVER_URL}/nonexistent", timeout=TIMEOUT, verify=False)
         
         if response.status_code == 404:
             print_pass()

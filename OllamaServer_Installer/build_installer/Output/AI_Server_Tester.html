@@ -4,119 +4,198 @@
     <meta charset="UTF-8">
     <title>VR AI Assistant - Admin Test Panel</title>
     <style>
-        :root { --primary: #00d2ff; --bg: #0f0f0f; --card: #1e1e1e; }
+        :root { --primary: #00d2ff; --bg: #0f0f0f; --card: #1e1e1e; --success: #00ff88; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; display: flex; justify-content: center; padding: 20px; }
         .panel { background: var(--card); padding: 25px; border-radius: 15px; width: 100%; max-width: 600px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         
-        /* Configuración de Red */
         .config-bar { display: flex; gap: 10px; margin-bottom: 20px; background: #2a2a2a; padding: 10px; border-radius: 8px; }
-        input { background: #333; border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; }
+        input { background: #333; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; outline: none; }
+        input:focus { border-color: var(--primary); }
         .ip-input { flex: 2; }
         .port-input { flex: 1; }
 
-        #recordBtn { 
-            width: 100%; padding: 25px; font-size: 1.2rem; font-weight: bold; border: none; 
-            border-radius: 10px; cursor: pointer; transition: 0.3s; 
-            background: #444; color: white; margin: 10px 0;
-        }
-        #recordBtn.active { background: #007bff; box-shadow: 0 0 15px #007bff; }
-        #recordBtn.recording { background: #ff4444; animation: pulse 1.5s infinite; }
+        .input-group { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
+        .text-row { display: flex; gap: 10px; }
+        #textQuery { flex: 1; border-left: 3px solid var(--primary); }
         
-        .results { background: #121212; padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); margin-top: 20px; min-height: 100px; }
-        .loader { display: none; width: 100%; height: 4px; background: #333; overflow: hidden; margin: 10px 0; }
-        .loader-bar { width: 40%; height: 100%; background: var(--primary); animation: load 2s infinite; position: relative; }
-        @keyframes load { from { left: -40%; } to { left: 100%; } }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } 100% { transform: scale(1); } }
+        button { padding: 12px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .btn-text { background: var(--primary); color: #000; }
+        
+        /* Botón Estilo Original Persistente */
+        #recordBtn { 
+            width: 100%; padding: 30px; font-size: 1.2rem; 
+            background: #333; color: white; border: 2px solid #444;
+            user-select: none; -webkit-user-select: none;
+            cursor: pointer;
+        }
+        #recordBtn.recording { 
+            background: var(--success) !important; 
+            color: black !important; 
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+        }
+
+        #resultBox { 
+            background: #000; border: 1px solid #333; padding: 15px; border-radius: 8px; 
+            min-height: 150px; white-space: pre-wrap; margin-top: 20px; line-height: 1.5;
+        }
+        .loader { display: none; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin: 15px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div class="panel">
-        <h3>Configuración de Servidor</h3>
-        <div class="config-bar">
-            <input type="text" id="ipAddr" class="ip-input" value="192.168.1.69" placeholder="IP del Server">
-            <input type="text" id="port" class="port-input" value="5000" placeholder="Puerto">
-        </div>
 
-        <button id="recordBtn">1. ACTIVAR MICRÓFONO</button>
-        <div id="loader" class="loader"><div class="loader-bar"></div></div>
-        <div id="status" style="font-size: 0.8rem; color: #888; text-align: center;">Haz clic para iniciar el sistema de audio</div>
-
-        <div class="results" id="resultBox">Los resultados del manual aparecerán aquí...</div>
+<div class="panel">
+    <h2>🧠 fAIware</h2>
+    
+    <div class="config-bar">
+        <input type="text" id="ipAddr" class="ip-input" placeholder="Servidor IP" value="localhost">
+        <input type="text" id="port" class="port-input" placeholder="Puerto" value="5000">
     </div>
 
-    <script>
-        let mediaStream = null;
-        let mediaRecorder = null;
-        let chunks = [];
-        let isSystemReady = false;
+    <div class="input-group">
+        <div class="text-row">
+            <input type="text" id="textQuery" placeholder="Escribe tu consulta (ej: Motor)..." onkeypress="if(event.key==='Enter') sendText()">
+            <button class="btn-text" onclick="sendText()">ENVIAR</button>
+        </div>
 
-        const recordBtn = document.getElementById('recordBtn');
-        const status = document.getElementById('status');
-        const resultBox = document.getElementById('resultBox');
-        const loader = document.getElementById('loader');
+        <hr style="width:100%; border:0; border-top:1px solid #333; margin: 10px 0;">
 
-        // Función para inicializar micrófono y mantenerlo activo
-        async function initAudio() {
+        <button id="recordBtn">MANTENER PARA HABLAR</button>
+    </div>
+
+    <div id="statusInfo" style="text-align: center; color: #888; font-size: 0.9rem;">
+        <span id="status">Haz clic una vez para activar micrófono</span>
+    </div>
+
+    <div class="loader" id="loader"></div>
+    <div id="resultBox">Los resultados aparecerán aquí...</div>
+</div>
+
+<script>
+    let mediaRecorder;
+    let chunks = [];
+    let audioStream = null;
+    
+    const recordBtn = document.getElementById('recordBtn');
+    const status = document.getElementById('status');
+    const resultBox = document.getElementById('resultBox');
+    const loader = document.getElementById('loader');
+
+    // Inicializar Micrófono (Solo pide permiso una vez)
+    async function initMic() {
+        if (!audioStream) {
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                isSystemReady = true;
-                recordBtn.innerText = "MANTENER PARA HABLAR";
-                recordBtn.classList.add('active');
-                status.innerText = "Micrófono conectado y persistente ✓";
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                status.innerText = "Micrófono listo (Presiona sin soltar)";
             } catch (err) {
-                alert("Error al acceder al micro: " + err);
+                alert("Error al acceder al micrófono: " + err);
             }
         }
+    }
 
-        recordBtn.onmousedown = () => {
-            if (!isSystemReady) {
-                initAudio();
-                return;
-            }
+    // --- LÓGICA DE TEXTO ---
+    async function sendText() {
+        const ip = document.getElementById('ipAddr').value;
+        const port = document.getElementById('port').value;
+        const query = document.getElementById('textQuery').value;
+        if (!query) return;
+
+        setLoading(true, "Consultando base de datos...");
+
+        try {
+            const response = await fetch(`https://${ip}:${port}/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: query })
+            });
+            const data = await response.json();
+            displayResult(query, data);
+        } catch (err) {
+            displayError(err);
+        } finally {
+            setLoading(false, "Entrada lista");
+        }
+    }
+
+    // --- LÓGICA DE AUDIO (PUSH-TO-TALK PERSISTENTE) ---
+    async function startRecording(e) {
+        e.preventDefault();
+        await initMic(); // Asegura que tengamos permiso
+        
+        if (audioStream && (!mediaRecorder || mediaRecorder.state === 'inactive')) {
             chunks = [];
-            mediaRecorder = new MediaRecorder(mediaStream);
+            mediaRecorder = new MediaRecorder(audioStream);
+            
             mediaRecorder.ondataavailable = e => chunks.push(e.data);
-            mediaRecorder.onstop = sendData;
+            mediaRecorder.onstop = sendAudio;
+            
             mediaRecorder.start();
             recordBtn.classList.add('recording');
+            recordBtn.innerText = "GRABANDO...";
             status.innerText = "Escuchando...";
-        };
-
-        recordBtn.onmouseup = () => {
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                mediaRecorder.stop();
-                recordBtn.classList.remove('recording');
-            }
-        };
-
-        async function sendData() {
-            const ip = document.getElementById('ipAddr').value;
-            const port = document.getElementById('port').value;
-            const blob = new Blob(chunks, { type: 'audio/wav' });
-            const formData = new FormData();
-            formData.append('audio', blob, 'query.wav');
-
-            loader.style.display = 'block';
-            status.innerText = "Procesando en el servidor...";
-
-            try {
-                const response = await fetch(`http://${ip}:${port}/query_audio`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                resultBox.innerHTML = `
-                    <p><strong>Pregunta:</strong> ${data.transcription}</p>
-                    <p style="color:var(--primary)"><strong>IA:</strong> ${data.answer}</p>
-                    <p><small>Páginas: ${data.pages}</small></p>
-                `;
-            } catch (err) {
-                resultBox.innerText = "Error de conexión. Revisa la IP y el Puerto.";
-            } finally {
-                loader.style.display = 'none';
-                status.innerText = "Micrófono listo (Persistente)";
-            }
         }
-    </script>
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            recordBtn.classList.remove('recording');
+            recordBtn.innerText = "MANTENER PARA HABLAR";
+        }
+    }
+
+    // Eventos Mouse
+    recordBtn.addEventListener('mousedown', startRecording);
+    recordBtn.addEventListener('mouseup', stopRecording);
+    recordBtn.addEventListener('mouseleave', stopRecording);
+    
+    // Eventos Touch
+    recordBtn.addEventListener('touchstart', startRecording);
+    recordBtn.addEventListener('touchend', stopRecording);
+
+    async function sendAudio() {
+        const ip = document.getElementById('ipAddr').value;
+        const port = document.getElementById('port').value;
+        const blob = new Blob(chunks, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('audio', blob, 'query.wav');
+
+        setLoading(true, "Procesando audio e IA...");
+
+        try {
+            const response = await fetch(`https://${ip}:${port}/query_audio`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            displayResult(data.transcription, data);
+        } catch (err) {
+            displayError(err);
+        } finally {
+            setLoading(false, "Micrófono listo");
+        }
+    }
+
+    function displayResult(query, data) {
+        const pages = data.sources ? data.sources.map(s => s.page).join(', ') : (data.pages || "N/A");
+        resultBox.innerHTML = `
+            <p><strong>Pregunta:</strong> ${query}</p>
+            <hr style="border-color:#222">
+            <p style="color:var(--primary)"><strong>IA:</strong> ${data.answer}</p>
+            <p><small style="color:#888">Páginas: ${pages}</small></p>
+            <p><small style="color:#444">Modelo: ${data.model_used || '...'}</small></p>
+        `;
+    }
+
+    function displayError(err) {
+        resultBox.innerHTML = `<span style="color:#ff3366">Error: ${err}<br>Asegúrate de aceptar el certificado en la pestaña /health</span>`;
+    }
+
+    function setLoading(isLoading, msg) {
+        loader.style.display = isLoading ? 'block' : 'none';
+        status.innerText = msg;
+    }
+</script>
+
 </body>
 </html>

@@ -76,6 +76,77 @@ RECOMMENDED_MODELS = {
         'description': '💎 ULTIMATE - Best quality (slower)',
         'recommended': False,
         'category': 'Premium'
+    },
+
+    'gemma2:2b': {
+        'size': '1.6 GB',
+        'speed': '⚡⚡⚡⚡',
+        'quality': '⭐⭐⭐⭐',
+        'spanish': '90% good',
+        'english': '95% native',
+        'description': '💎 GOOGLE - Excellent logic in small size',
+        'recommended': True,
+        'category': 'Balanced'
+    },
+    'gemma2:9b': {
+        'size': '5.4 GB',
+        'speed': '⚡⚡',
+        'quality': '⭐⭐⭐⭐⭐',
+        'spanish': '95% native',
+        'english': '98% native',
+        'description': '🏆 HIGH QUALITY - Superior reasoning for RAG',
+        'recommended': False,
+        'category': 'Quality'
+    },
+    'mistral:7b-instruct-v0.3': {
+        'size': '4.1 GB',
+        'speed': '⚡⚡',
+        'quality': '⭐⭐⭐⭐⭐',
+        'spanish': '85% good',
+        'english': '98% native',
+        'description': '🌀 MISTRAL - Industry standard for technical tasks',
+        'recommended': False,
+        'category': 'Technical'
+    },
+    'granite3.1-dense:2b': {
+        'size': '1.3 GB',
+        'speed': '⚡⚡⚡⚡⚡',
+        'quality': '⭐⭐⭐⭐',
+        'spanish': '88% good',
+        'english': '96% native',
+        'description': '🏢 IBM - Optimized for enterprise/RAG',
+        'recommended': True,
+        'category': 'RAG Optimized'
+    },
+    'phi4:14b': {
+        'size': '9.1 GB',
+        'speed': '⚡',
+        'quality': '⭐⭐⭐⭐⭐⭐',
+        'spanish': '92% good',
+        'english': '99% native',
+        'description': '🧠 MICROSOFT - Top tier reasoning (Needs 12GB+ RAM)',
+        'recommended': False,
+        'category': 'Heavyweight'
+    },
+    'smollm2:1.7b': {
+        'size': '1.0 GB',
+        'speed': '⚡⚡⚡⚡⚡',
+        'quality': '⭐⭐⭐',
+        'spanish': '75% fair',
+        'english': '90% good',
+        'description': '👶 SMOL - Ultra lightweight for mobile/basic CPUs',
+        'recommended': False,
+        'category': 'Experimental'
+    },
+    'tinyllama:1.1b': {
+        'size': '637 MB',
+        'speed': '⚡⚡⚡⚡⚡+',
+        'quality': '⭐⭐',
+        'spanish': '60% basic',
+        'english': '80% good',
+        'description': '📟 TINY - Smallest possible model available',
+        'recommended': False,
+        'category': 'Speed'
     }
 }
 
