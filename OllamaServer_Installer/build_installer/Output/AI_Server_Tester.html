@@ -49,10 +49,14 @@
 <div class="panel">
     <h2>🧠 fAIware</h2>
     
+    <div id="statusInfo" style="text-align: center; color: #888; font-size: 0.9rem;"> 
+        <span class="cert-link" onclick="openHealth()">[Validar Certificado]</span>
+    </div>
+
     <div class="config-bar">
         <input type="text" id="ipAddr" class="ip-input" placeholder="Servidor IP" value="localhost">
         <input type="text" id="port" class="port-input" placeholder="Puerto" value="5000">
-    </div>
+    </div> 
 
     <div class="input-group">
         <div class="text-row">
@@ -64,11 +68,10 @@
 
         <button id="recordBtn">MANTENER PARA HABLAR</button>
     </div>
-
     <div id="statusInfo" style="text-align: center; color: #888; font-size: 0.9rem;">
-        <span id="status">Haz clic una vez para activar micrófono</span>
-        <span class="cert-link" onclick="openHealth()">[Validar Certificado]</span>
+        <span id="status">Haz clic una vez para activar micrófono</span> 
     </div>
+
 
     <div class="loader" id="loader"></div>
     <div id="resultBox">Los resultados aparecerán aquí...</div>
