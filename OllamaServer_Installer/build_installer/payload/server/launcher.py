@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VR Manual Server - GUI Launcher v6.1 FIXED
+VR Manual Server - GUI Launcher v6.2 FIXED
 BILINGUAL EDITION (Spanish/English)
-FIX: Launcher freeze issue resolved
+FIX: HTTP/HTTPS protocol detection + encoding issues resolved
 """
 
 import sys
@@ -153,7 +153,7 @@ RECOMMENDED_MODELS = {
 class ServerLauncher:
     def __init__(self, root):
         self.root = root
-        self.root.title("VR Training AI Server v6.1 - Bilingual Edition")
+        self.root.title("VR Training AI Server v6.2 - Bilingual Edition")
         
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
@@ -178,6 +178,10 @@ class ServerLauncher:
         self.current_model = None
         self.downloading_model = None
         
+        # Auto-detect protocol (HTTP or HTTPS)
+        self.server_protocol = "http"  # Default to HTTP
+        self.server_url = f"{self.server_protocol}://localhost:5000"
+        
         if getattr(sys, 'frozen', False):
             self.script_dir = Path(sys.executable).parent
         else:
@@ -192,6 +196,21 @@ class ServerLauncher:
         
         self.auto_refresh_manuals()
         self.auto_refresh_models()
+        
+    def detect_server_protocol(self):
+        """Auto-detect if server is using HTTP or HTTPS"""
+        for protocol in ['https', 'http']:
+            try:
+                url = f"{protocol}://localhost:5000/health"
+                response = requests.get(url, timeout=2, verify=False)
+                if response.status_code == 200:
+                    self.server_protocol = protocol
+                    self.server_url = f"{protocol}://localhost:5000"
+                    self.log(f"ℹ️ Server protocol detected: {protocol.upper()}")
+                    return True
+            except:
+                continue
+        return False
         
     def load_config(self):
         """Load server configuration"""
@@ -399,274 +418,200 @@ class ServerLauncher:
         
         self.ip_label = tk.Label(
             status_info,
-            text=f"IP: {self.get_local_ip()}",
-            font=("Arial", 9)
+            text="IP: Not running",
+            font=("Arial", 9),
+            fg="#666"
         )
         self.ip_label.pack(side=tk.LEFT, padx=(15, 0))
         
-        # MANUALS
-        manuals_frame = tk.LabelFrame(main, text="📚 Indexed Manuals", padx=8, pady=4)
-        manuals_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 5))
+        # CONTROL BUTTONS
+        btn_frame = tk.Frame(status_frame)
+        btn_frame.pack(fill=tk.X, pady=(5, 0))
         
-        list_container = tk.Frame(manuals_frame)
-        list_container.pack(fill=tk.BOTH, expand=True)
+        self.btn_start = tk.Button(
+            btn_frame,
+            text="▶ Start Server",
+            command=self.start_server,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            width=15,
+            height=1
+        )
+        self.btn_start.pack(side=tk.LEFT, padx=(0, 5))
         
-        scrollbar = tk.Scrollbar(list_container)
+        self.btn_stop = tk.Button(
+            btn_frame,
+            text="⏹ Stop Server",
+            command=self.stop_server,
+            bg="#f44336",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            width=15,
+            height=1,
+            state=tk.DISABLED
+        )
+        self.btn_stop.pack(side=tk.LEFT, padx=(0, 5))
+        
+        tk.Button(
+            btn_frame,
+            text="🔍 Test Connection",
+            command=self.test_connection,
+            bg="#2196F3",
+            fg="white",
+            font=("Arial", 9),
+            width=15
+        ).pack(side=tk.LEFT)
+        
+        # MANUALS SECTION
+        manuals_frame = tk.LabelFrame(main, text="📚 Indexed Manuals", padx=8, pady=6)
+        manuals_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        
+        self.manuals_info_label = tk.Label(
+            manuals_frame,
+            text="No manuals",
+            font=("Arial", 9),
+            fg="#666"
+        )
+        self.manuals_info_label.pack(anchor=tk.W, pady=(0, 3))
+        
+        manuals_scroll_frame = tk.Frame(manuals_frame)
+        manuals_scroll_frame.pack(fill=tk.BOTH, expand=True)
+        
+        scrollbar = tk.Scrollbar(manuals_scroll_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         self.manuals_listbox = tk.Listbox(
-            list_container,
-            height=4,
+            manuals_scroll_frame,
             font=("Consolas", 9),
             yscrollcommand=scrollbar.set,
+            height=8,
             selectmode=tk.EXTENDED
         )
         self.manuals_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.manuals_listbox.yview)
         
-        self.manuals_listbox.bind("<Button-3>", self.show_context_menu)
+        self.manuals_listbox.bind('<Button-3>', self.show_context_menu)
         
-        manuals_controls = tk.Frame(manuals_frame)
-        manuals_controls.pack(fill=tk.X, pady=(4, 0))
-        
-        self.manuals_info_label = tk.Label(
-            manuals_controls,
-            text="No manuals indexed",
-            font=("Arial", 8),
-            fg="#666"
-        )
-        self.manuals_info_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        manuals_btn_frame = tk.Frame(manuals_frame)
+        manuals_btn_frame.pack(fill=tk.X, pady=(5, 0))
         
         tk.Button(
-            manuals_controls,
-            text="🔄",
+            manuals_btn_frame,
+            text="🔄 Refresh",
             command=self.refresh_manuals_list,
-            cursor="hand2",
-            width=3,
-            font=("Arial", 9)
-        ).pack(side=tk.RIGHT, padx=(3, 0))
+            font=("Arial", 8),
+            width=12
+        ).pack(side=tk.LEFT, padx=(0, 3))
         
         tk.Button(
-            manuals_controls,
+            manuals_btn_frame,
             text="🗑️ Clear All",
             command=self.clear_all_database,
-            cursor="hand2",
-            width=10,
-            bg="#f44336",
-            fg="white",
-            font=("Arial", 8)
-        ).pack(side=tk.RIGHT)
-        
-        tk.Button(
-            manuals_controls,
-            text="❌ Delete",
-            command=self.delete_selected_manuals,
-            cursor="hand2",
-            width=10,
             bg="#ff9800",
             fg="white",
-            font=("Arial", 8)
-        ).pack(side=tk.RIGHT, padx=(0, 3))
+            font=("Arial", 8),
+            width=12
+        ).pack(side=tk.LEFT)
         
-        # MANUAL SELECTION
-        pdf_frame = tk.LabelFrame(main, text="Manual Selection", padx=8, pady=4)
+        # PDF INDEXING SECTION
+        pdf_frame = tk.LabelFrame(main, text="📄 Index New Manual", padx=8, pady=6)
         pdf_frame.pack(fill=tk.X, pady=(0, 5))
         
-        pdf_info = tk.Frame(pdf_frame)
-        pdf_info.pack(fill=tk.X)
+        pdf_select_frame = tk.Frame(pdf_frame)
+        pdf_select_frame.pack(fill=tk.X)
         
         self.pdf_label = tk.Label(
-            pdf_info,
-            text="No manual selected",
-            font=("Arial", 9)
+            pdf_select_frame,
+            text="No file selected",
+            font=("Arial", 9),
+            fg="#666",
+            anchor=tk.W
         )
         self.pdf_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         tk.Button(
-            pdf_info,
-            text="Browse...",
+            pdf_select_frame,
+            text="📁 Browse",
             command=self.browse_pdf,
-            width=10,
-            font=("Arial", 9)
-        ).pack(side=tk.RIGHT, padx=3)
+            font=("Arial", 9),
+            width=10
+        ).pack(side=tk.LEFT, padx=(5, 0))
         
         tk.Button(
-            pdf_frame,
-            text="📊 Index Manual",
+            pdf_select_frame,
+            text="📥 Index",
             command=self.index_manual,
             bg="#4CAF50",
             fg="white",
-            font=("Arial", 10, "bold"),
-            cursor="hand2"
-        ).pack(fill=tk.X, pady=(5, 0))
+            font=("Arial", 9, "bold"),
+            width=10
+        ).pack(side=tk.LEFT, padx=(5, 0))
         
-        # PROGRESS
-        progress_frame = tk.LabelFrame(main, text="Indexing Progress", padx=8, pady=4)
-        progress_frame.pack(fill=tk.X, pady=(0, 5))
+        self.progress_frame = tk.Frame(pdf_frame)
         
-        self.progress_info = tk.Label(
-            progress_frame,
-            text="No indexing in progress",
+        self.progress_label = tk.Label(
+            self.progress_frame,
+            text="Ready",
             font=("Arial", 8),
-            fg="#666666"
+            fg="#666"
         )
-        self.progress_info.pack(anchor=tk.W)
+        self.progress_label.pack()
         
         self.progress_bar = ttk.Progressbar(
-            progress_frame,
-            mode='determinate',
-            maximum=100
+            self.progress_frame,
+            mode='determinate'
         )
-        self.progress_bar.pack(fill=tk.X, pady=(3, 3))
+        self.progress_bar.pack(fill=tk.X)
         
-        self.progress_percent = tk.Label(
-            progress_frame,
-            text="0%",
-            font=("Arial", 9, "bold"),
-            fg="#2196F3"
-        )
-        self.progress_percent.pack()
-        
-        # CONTROL BUTTONS
-        btn_frame = tk.Frame(main)
-        btn_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        self.btn_start = tk.Button(
-            btn_frame,
-            text="▶ Start",
-            command=self.start_server,
-            bg="#2196F3",
-            fg="white",
-            font=("Arial", 10, "bold"),
-            cursor="hand2",
-            width=12
-        )
-        self.btn_start.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 3))
-        
-        self.btn_stop = tk.Button(
-            btn_frame,
-            text="⏹ Stop",
-            command=self.stop_server,
-            bg="#f44336",
-            fg="white",
-            font=("Arial", 10, "bold"),
-            state=tk.DISABLED,
-            cursor="hand2",
-            width=12
-        )
-        self.btn_stop.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 3))
-        
-        tk.Button(
-            btn_frame,
-            text="Test",
-            command=self.test_connection,
-            bg="#FF9800",
-            fg="white",
-            cursor="hand2",
-            font=("Arial", 10),
-            width=8
-        ).pack(side=tk.LEFT, padx=(3, 3))
-        
-        tk.Button(
-            btn_frame,
-            text="Clear Log",
-            command=self.clear_log,
-            bg="#9E9E9E",
-            fg="white",
-            cursor="hand2",
-            font=("Arial", 10),
-            width=10
-        ).pack(side=tk.LEFT, padx=(3, 3))
-        
-        tk.Button(
-            btn_frame,
-            text="Quit",
-            command=self.quit_app,
-            bg="#f44336",
-            fg="white",
-            cursor="hand2",
-            font=("Arial", 10),
-            width=8
-        ).pack(side=tk.LEFT, padx=(3, 0))
-        
-        # LOG
-        log_frame = tk.LabelFrame(main, text="Server Log", padx=5, pady=5)
+        # LOG SECTION
+        log_frame = tk.LabelFrame(main, text="📋 Activity Log", padx=8, pady=6)
         log_frame.pack(fill=tk.BOTH, expand=True)
         
         self.log_text = scrolledtext.ScrolledText(
             log_frame,
-            height=6,
-            font=("Consolas", 8),
-            bg="#1e1e1e",
-            fg="#d4d4d4",
-            insertbackground="white",
+            font=("Consolas", 9),
+            height=8,
             wrap=tk.WORD
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
-    
-    def get_local_ip(self):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except:
-            return "localhost"
+        
+        log_btn_frame = tk.Frame(log_frame)
+        log_btn_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        tk.Button(
+            log_btn_frame,
+            text="🗑️ Clear Log",
+            command=self.clear_log,
+            font=("Arial", 8),
+            width=12
+        ).pack(side=tk.LEFT)
+        
+        # Initial log message
+        self.log("🎓 VR Training AI Server v6.2 - Ready")
+        self.log("ℹ️ Click 'Start Server' to begin")
     
     def log(self, message):
+        """Add message to log"""
         timestamp = time.strftime("%H:%M:%S")
         self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
         self.log_text.see(tk.END)
-        self.log_text.update()
-        self.parse_progress(message)
     
-    def parse_progress(self, message):
-        import re
-        
-        if 'Indexing' in message and '.pdf' in message:
-            self.indexing_in_progress = True
-            self.update_progress(10, "Starting...")
-            return
-        
-        match = re.search(r'Processing page (\d+)/(\d+)', message)
-        if match:
-            current = int(match.group(1))
-            total = int(match.group(2))
-            percent = 15 + int((current / total) * 70)
-            self.update_progress(percent, f"Page {current}/{total}")
-            return
-        
-        if 'Successfully indexed' in message or 'indexed successfully' in message:
-            self.update_progress(100, "✓ Completed!")
-            self.indexing_in_progress = False
-            self.root.after(2000, self.refresh_manuals_list)
-            return
-        
-        if 'error' in message.lower() or 'failed' in message.lower():
-            self.update_progress(0, "✗ Error")
-            self.indexing_in_progress = False
-            return
-    
-    def update_progress(self, percent, text):
-        try:
-            self.progress_bar['value'] = percent
-            self.progress_percent.config(text=f"{percent}%")
-            self.progress_info.config(text=text, fg="#2196F3")
-            self.root.update_idletasks()
-        except:
-            pass
+    def update_progress(self, value, text=""):
+        """Update progress bar"""
+        self.progress_bar['value'] = value
+        if text:
+            self.progress_label.config(text=text)
+        self.root.update()
     
     def reset_progress(self):
-        self.indexing_in_progress = False
+        """Reset progress bar"""
         self.progress_bar['value'] = 0
-        self.progress_percent.config(text="0%")
-        self.progress_info.config(text="No indexing in progress", fg="#666666")
+        self.progress_label.config(text="Ready")
+        self.progress_frame.pack_forget()
     
     def refresh_models_list(self, silent=False):
-        if not silent:
-            self.log("🔄 Refreshing models...")
-        
+        """Refresh available models from Ollama"""
         def do_refresh():
             try:
                 result = subprocess.run(
@@ -677,26 +622,17 @@ class ServerLauncher:
                 )
                 
                 if result.returncode == 0:
-                    lines = result.stdout.strip().split('\n')[1:]
                     self.available_models = {}
-                    
-                    for line in lines:
+                    for line in result.stdout.strip().split('\n')[1:]:
                         if line.strip():
                             parts = line.split()
                             if parts:
                                 model_name = parts[0]
-                                self.available_models[model_name] = {
-                                    'name': model_name,
-                                    'size': parts[1] if len(parts) > 1 else 'Unknown'
-                                }
+                                self.available_models[model_name] = True
                     
                     self.root.after(0, self.update_model_combo)
                     if not silent:
                         self.log(f"✓ Found {len(self.available_models)} models")
-                else:
-                    if not silent:
-                        self.log("⚠ Ollama not responding")
-                    
             except FileNotFoundError:
                 if not silent:
                     self.log("⚠ Ollama not installed")
@@ -734,7 +670,7 @@ class ServerLauncher:
         try:
             if self.server_running:
                 response = requests.post(
-                    "https://localhost:5000/switch_model",
+                    f"{self.server_url}/switch_model",
                     json={"model_name": model_name},
                     timeout=5,
                     verify=False
@@ -907,7 +843,7 @@ class ServerLauncher:
             return
         
         try:
-            response = requests.get("http://localhost:5000/manuals", timeout=5)
+            response = requests.get(f"{self.server_url}/manuals", timeout=5, verify=False)
             if response.status_code == 200:
                 data = response.json()
                 self.indexed_manuals = data.get('manuals', {})
@@ -961,7 +897,7 @@ class ServerLauncher:
             return
         
         try:
-            response = requests.post("http://localhost:5000/clear_all", timeout=10)
+            response = requests.post(f"{self.server_url}/clear_all", timeout=10, verify=False)
             if response.status_code == 200:
                 data = response.json()
                 self.log(f"✓ Cleared: {data['chunks_deleted']} chunks")
@@ -1021,8 +957,9 @@ class ServerLauncher:
         for manual_name in selected_manuals:
             try:
                 response = requests.delete(
-                    f"http://localhost:5000/manual/{manual_name}",
-                    timeout=10
+                    f"{self.server_url}/manual/{manual_name}",
+                    timeout=10,
+                    verify=False
                 )
                 if response.status_code == 200:
                     self.log(f"✓ Deleted: {manual_name}")
@@ -1076,9 +1013,10 @@ class ServerLauncher:
         
         try:
             response = requests.post(
-                "http://localhost:5000/check_manual",
+                f"{self.server_url}/check_manual",
                 json={"pdf_path": str(self.selected_pdf)},
-                timeout=30
+                timeout=30,
+                verify=False
             )
             
             if response.status_code == 200:
@@ -1102,7 +1040,7 @@ class ServerLauncher:
         def do_index():
             try:
                 response = requests.post(
-                    "https://localhost:5000/index",
+                    f"{self.server_url}/index",
                     json={"pdf_path": str(self.selected_pdf)},
                     timeout=1800,
                     verify=False
@@ -1152,9 +1090,38 @@ class ServerLauncher:
             self.log("✓ Server started in separate window!")
             self.log("ℹ Check the new console window for server output")
             
-            # Refresh after server starts
-            self.root.after(3000, self.refresh_manuals_list)
-            self.root.after(3000, self.refresh_models_list)
+            # Detect protocol after server starts
+            def detect_protocol():
+                # Try multiple times with increasing delays
+                delays = [2, 3, 5, 8, 10]  # Total: hasta 28 segundos
+                for i, delay in enumerate(delays, 1):
+                    time.sleep(delay)
+                    self.root.after(0, lambda attempt=i: self.log(f"🔍 Connection attempt {attempt}/{len(delays)}..."))
+                    
+                    if self.detect_server_protocol():
+                        self.root.after(0, lambda: self.log(f"✓ Connected! Using: {self.server_protocol.upper()}"))
+                        self.root.after(0, self.refresh_manuals_list)
+                        self.root.after(0, self.refresh_models_list)
+                        return
+                
+                # Si falla después de todos los intentos
+                self.root.after(0, lambda: self.log("✗ Server didn't respond after 28 seconds"))
+                self.root.after(0, lambda: self.log("ℹ️ Check the console window for errors"))
+                self.root.after(0, lambda: messagebox.showwarning(
+                    "Server Not Responding",
+                    "The server process started but is not responding.\n\n"
+                    "Common issues:\n"
+                    "• Ollama is not running (run 'ollama serve')\n"
+                    "• Port 5000 is already in use\n"
+                    "• Missing Python dependencies\n"
+                    "• Check the console window for error messages\n\n"
+                    "Try:\n"
+                    "1. Close this launcher\n"
+                    "2. Run 'ollama serve' in a terminal\n"
+                    "3. Restart the launcher"
+                ))
+            
+            threading.Thread(target=detect_protocol, daemon=True).start()
             
         except Exception as e:
             self.log(f"✗ Failed: {str(e)}")
@@ -1179,8 +1146,14 @@ class ServerLauncher:
         """Test connection"""
         self.log("🔍 Testing connection...")
         
+        # Try to detect protocol first
+        if not self.detect_server_protocol():
+            self.log("✗ Server not responding")
+            messagebox.showerror("Error", "Cannot connect to server")
+            return
+        
         try:
-            response = requests.get("https://localhost:5000/health", timeout=5, verify=False)
+            response = requests.get(f"{self.server_url}/health", timeout=5, verify=False)
             if response.status_code == 200:
                 data = response.json()
                 self.log("✓ Server responding!")

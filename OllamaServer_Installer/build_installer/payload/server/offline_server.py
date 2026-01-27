@@ -15,7 +15,8 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS  
+import shutil 
 
 # Windows console encoding fix
 if sys.platform == 'win32':
@@ -679,6 +680,7 @@ def switch_model():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
 @app.route('/manuals', methods=['GET'])
 def list_manuals():
     return jsonify({
@@ -729,61 +731,88 @@ def check_manual():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+#@app.route('/index', methods=['POST'])
 @app.route('/index', methods=['POST'])
-def index_manual():
+def index_from_path():
+    """Index a PDF from a file path (used by launcher)"""
     try:
         data = request.get_json()
         pdf_path = data.get('pdf_path')
-        force_reindex = data.get('force_reindex', False)
         
         if not pdf_path:
             return jsonify({'error': 'No pdf_path provided'}), 400
         
-        if not force_reindex:
-            manual_name = Path(pdf_path).stem
-            
-            if check_manual_exists(manual_name):
-                manual_info = indexed_manuals[manual_name]
-                return jsonify({
-                    'error': 'Duplicate manual',
-                    'duplicate': True,
-                    'existing_manual': manual_name,
-                    'manual_info': manual_info
-                }), 409
-            
-            file_hash = calculate_file_hash(pdf_path)
-            if file_hash:
-                existing_manual = check_file_hash_exists(file_hash)
-                if existing_manual:
-                    manual_info = indexed_manuals[existing_manual]
-                    return jsonify({
-                        'error': 'Duplicate file',
-                        'duplicate': True,
-                        'existing_manual': existing_manual,
-                        'manual_info': manual_info
-                    }), 409
+        if not Path(pdf_path).exists():
+            return jsonify({'error': 'File not found'}), 404
         
-        if force_reindex:
-            manual_name = Path(pdf_path).stem
-            if check_manual_exists(manual_name):
-                try:
-                    results = collection.get(where={"manual_name": manual_name})
-                    if results and results['ids']:
-                        collection.delete(ids=results['ids'])
-                    del indexed_manuals[manual_name]
-                    log_message(f"Deleted old version of '{manual_name}'")
-                except Exception as e:
-                    log_message(f"Error deleting old manual: {e}", "WARN")
+        # Call the indexing function
+        result = index_single_manual(pdf_path)
         
-        result = index_single_manual(pdf_path, force_reindex=force_reindex)
-        
-        if result['success']:
-            return jsonify(result), 200
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'manual_name': result['manual_name'],
+                'chunks': result['chunks'],
+                'pages': result['pages'],
+                'message': f"Manual '{result['manual_name']}' indexed successfully"
+            })
         else:
-            return jsonify(result), 400
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Unknown error')
+            }), 500
             
     except Exception as e:
+        log_message(f"Error in /index endpoint: {e}", "ERROR")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/index_manual', methods=['POST'])
+def index_manual():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Empty filename"}), 400
+
+    # FIX: Asegurar que la carpeta de manuales exista y guardar el archivo
+    if not os.path.exists(manuals_folder):
+        os.makedirs(manuals_folder)
+
+    file_path = os.path.join(manuals_folder, file.filename)
+    file.save(file_path) # Copia física a la carpeta de manuales
+
+    # Indexar en la DB vectorial
+    success = vector_db.add_manual(file_path)
+    
+    if success:
+        # Devolver la lista actualizada de archivos PDF para que el cliente la vea
+        indexed_files = [f for f in os.listdir(manuals_folder) if f.lower().endswith('.pdf')]
+        return jsonify({
+            "message": f"Manual {file.filename} indexado con éxito",
+            "files": indexed_files
+        })
+    else:
+        return jsonify({"error": "Error al procesar el PDF"}), 500
+
+@app.route('/delete_manual/<filename>', methods=['DELETE'])
+def delete_manual_file(filename):
+    try:
+        file_path = os.path.join(manuals_folder, filename)
+        
+        # 1. Eliminar archivo físico
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # 2. Eliminar de la base de datos vectorial (ChromaDB)
+        vector_db.delete_source(filename)
+        
+        # 3. Devolver lista actualizada
+        files = [f for f in os.listdir(manuals_folder) if f.lower().endswith('.pdf')]
+        return jsonify({"message": "Eliminado correctamente", "files": files})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/index/batch', methods=['POST'])
 def index_batch():

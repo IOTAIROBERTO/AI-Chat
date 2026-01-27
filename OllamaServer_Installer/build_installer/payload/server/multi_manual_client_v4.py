@@ -264,6 +264,45 @@ def index_single_manual(pdf_path, force_reindex=False):
         print_error(f"Error: {e}")
         return False
 
+def upload_file(self):
+    file_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
+    if not file_path:
+        return
+
+    self.status_label.config(text="Indexando manual...", foreground="orange")
+
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        try:
+            # Petición al servidor (usando verify=False por los certificados auto-firmados)
+            response = requests.post(f"{self.server_url}/index_manual", files=files, verify=False)
+            if response.status_code == 200:
+                data = response.json()
+                # FIX: Actualizar el Listbox con los archivos devueltos
+                self.refresh_manuals_list(data.get('files', []))
+                messagebox.showinfo("Éxito", "Manual indexado y guardado en el servidor.")
+            else:
+                messagebox.showerror("Error", "No se pudo indexar el manual.")
+        except Exception as e:
+            messagebox.showerror("Error de Conexión", str(e))
+        finally:
+            self.status_label.config(text="Listo", foreground="#00ff88")
+
+def delete_manual(self):
+    selection = self.manuals_listbox.curselection()
+    if not selection:
+        return
+        
+    filename = self.manuals_listbox.get(selection[0])
+    if messagebox.askyesno("Confirmar", f"¿Borrar {filename} permanentemente?"):
+        try:
+            response = requests.delete(f"{self.server_url}/delete_manual/{filename}", verify=False)
+            if response.status_code == 200:
+                # Refrescar la lista tras borrar
+                self.refresh_manuals_list(response.json().get('files', []))
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al borrar: {e}")
+            
 def index_batch_with_duplicate_check(pdf_paths):
     """Index multiple manuals with duplicate checking"""
     print_header("BATCH INDEXING WITH DUPLICATE DETECTION")
