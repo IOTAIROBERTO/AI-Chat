@@ -68,7 +68,7 @@ Source: "logo.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexi
 [Dirs]
 Name: "{app}\logs"; Permissions: users-modify
 Name: "{app}\manuals"; Permissions: users-modify
-Source: "server\logo.png"; DestDir: "{app}\server"; Flags: ignoreversion skipifsourcedoesntexist
+Name: "{app}\temp"; Permissions: users-modify
 Name: "{app}\server"; Permissions: users-modify
 Name: "{localappdata}\{#MyAppName}"; Permissions: users-modify
 Name: "{localappdata}\{#MyAppName}\chroma_db"; Permissions: users-modify
@@ -132,6 +132,6 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
-Type: files; Name: "{{temp}}\training_ai_*"
-Type: files; Name: "{{temp}}\ollama*"
+    InstallationSuccessful := True;
+  end;
 end;
