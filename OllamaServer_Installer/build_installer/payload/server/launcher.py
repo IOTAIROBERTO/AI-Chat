@@ -15,9 +15,7 @@ import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import time
-from pathlib import Path
-import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog, messagebox
+LOG_DIR = Path("logs")
 import json
 
 # BILINGUAL MODELS ONLY (Spanish/English native support)
@@ -284,7 +282,7 @@ class ServerLauncher:
             model_info = RECOMMENDED_MODELS[self.current_model]
             info_text = f"ES: {model_info['spanish']} | EN: {model_info['english']}"
             tk.Label(
-                current_model_frame,
+            script_path = Path(SERVER_SCRIPT)
                 text=info_text,
                 font=("Arial", 8),
                 fg="#666"
@@ -678,11 +676,8 @@ class ServerLauncher:
                 
                 if result.returncode == 0:
                     lines = result.stdout.strip().split('\n')[1:]
-                    self.available_models = {}
-                    
-                    for line in lines:
                         if line.strip():
-                            parts = line.split()
+            cmd = [sys.executable, "-u", SERVER_SCRIPT]
                             if parts:
                                 model_name = parts[0]
                                 self.available_models[model_name] = {
