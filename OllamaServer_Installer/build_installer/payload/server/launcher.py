@@ -22,91 +22,26 @@ import json
 
 # BILINGUAL MODELS ONLY (Spanish/English native support)
 RECOMMENDED_MODELS = {
-    # TOP TIER - NATIVE BILINGUAL (Recommended)
+    # === TIER 1: ESENCIALES (Descarga ESTOS) ===
     'qwen2.5:1.5b': {
         'size': '1.0 GB',
         'speed': '⚡⚡⚡⚡⚡',
         'quality': '⭐⭐⭐⭐⭐',
         'spanish': '96% native',
         'english': '98% native',
-        'description': '🔥 BEST - Fastest & smallest bilingual model',
+        'description': '🔥 BEST - Default for VR/RAG',
         'recommended': True,
         'category': 'Default'
     },
     'qwen2.5:3b': {
         'size': '1.9 GB',
-        'speed': '⚡⚡⚡',
+        'speed': '⚡⚡⚡⚡',
         'quality': '⭐⭐⭐⭐⭐',
         'spanish': '98% native',
         'english': '99% native',
-        'description': '⭐ PREMIUM - Best quality bilingual',
+        'description': '⭐ PREMIUM - Best quality for RAG',
         'recommended': True,
         'category': 'Quality'
-    },
-    'llama3.2:1b': {
-        'size': '1.3 GB',
-        'speed': '⚡⚡⚡⚡⚡',
-        'quality': '⭐⭐⭐',
-        'spanish': '80% good',
-        'english': '85% good',
-        'description': '⚡ ULTRA-FAST - Speed optimized',
-        'recommended': True,
-        'category': 'Speed'
-    },
-    
-    # LEGACY - KEEP AVAILABLE
-    'llama3.2:3b': {
-        'size': '2.0 GB',
-        'speed': '⚡⚡⚡',
-        'quality': '⭐⭐⭐',
-        'spanish': '75% translated',
-        'english': '90% native',
-        'description': '📦 LEGACY - Your current model (keep as backup)',
-        'recommended': False,
-        'category': 'Legacy'
-    },
-    
-    # OPTIONAL
-    'qwen2.5:7b': {
-        'size': '4.4 GB',
-        'speed': '⚡⚡',
-        'quality': '⭐⭐⭐⭐⭐',
-        'spanish': '99% native',
-        'english': '99% native',
-        'description': '💎 ULTIMATE - Best quality (slower)',
-        'recommended': False,
-        'category': 'Premium'
-    },
-
-    'gemma2:2b': {
-        'size': '1.6 GB',
-        'speed': '⚡⚡⚡⚡',
-        'quality': '⭐⭐⭐⭐',
-        'spanish': '90% good',
-        'english': '95% native',
-        'description': '💎 GOOGLE - Excellent logic in small size',
-        'recommended': True,
-        'category': 'Balanced'
-    },
-    'gemma2:9b': {
-        'size': '5.4 GB',
-        'speed': '⚡⚡',
-        'quality': '⭐⭐⭐⭐⭐',
-        'spanish': '95% native',
-        'english': '98% native',
-        'description': '🏆 HIGH QUALITY - Superior reasoning for RAG',
-        'recommended': False,
-        'category': 'Quality'
-    },
-    'mistral:7b-instruct-v0.3': {
-        'size': '4.1 GB',
-        'speed': '⚡⚡',
-        'quality': '⭐⭐⭐⭐⭐',
-        'spanish': '85% good',
-        'english': '98% native',
-        'description': '🌀 MISTRAL - Industry standard for technical tasks',
-        'recommended': False,
-        'category': 'Technical'
     },
     'granite3.1-dense:2b': {
         'size': '1.3 GB',
@@ -114,40 +49,32 @@ RECOMMENDED_MODELS = {
         'quality': '⭐⭐⭐⭐',
         'spanish': '88% good',
         'english': '96% native',
-        'description': '🏢 IBM - Optimized for enterprise/RAG',
+        'description': '🏢 IBM - Optimized specifically for RAG',
         'recommended': True,
         'category': 'RAG Optimized'
     },
-    'phi4:14b': {
-        'size': '9.1 GB',
-        'speed': '⚡',
-        'quality': '⭐⭐⭐⭐⭐⭐',
-        'spanish': '92% good',
+    
+    # === TIER 2: OPCIONALES (Si tienes espacio/necesitas) ===
+    'gemma2:2b': {
+        'size': '1.6 GB',
+        'speed': '⚡⚡⚡⚡',
+        'quality': '⭐⭐⭐⭐',
+        'spanish': '90% good',
+        'english': '95% native',
+        'description': '💎 GOOGLE - Excellent reasoning for manuals',
+        'recommended': True,
+        'category': 'Balanced'
+    },
+    'qwen2.5:7b': {
+        'size': '4.4 GB',
+        'speed': '⚡⚡',
+        'quality': '⭐⭐⭐⭐⭐',
+        'spanish': '99% native',
         'english': '99% native',
-        'description': '🧠 MICROSOFT - Top tier reasoning (Needs 12GB+ RAM)',
+        'description': '💎 ULTIMATE - Best quality (slower, desktop only)',
         'recommended': False,
-        'category': 'Heavyweight'
+        'category': 'Premium'
     },
-    'smollm2:1.7b': {
-        'size': '1.0 GB',
-        'speed': '⚡⚡⚡⚡⚡',
-        'quality': '⭐⭐⭐',
-        'spanish': '75% fair',
-        'english': '90% good',
-        'description': '👶 SMOL - Ultra lightweight for mobile/basic CPUs',
-        'recommended': False,
-        'category': 'Experimental'
-    },
-    'tinyllama:1.1b': {
-        'size': '637 MB',
-        'speed': '⚡⚡⚡⚡⚡+',
-        'quality': '⭐⭐',
-        'spanish': '60% basic',
-        'english': '80% good',
-        'description': '📟 TINY - Smallest possible model available',
-        'recommended': False,
-        'category': 'Speed'
-    }
 }
 
 class ServerLauncher:
@@ -181,6 +108,8 @@ class ServerLauncher:
         # Auto-detect protocol (HTTP or HTTPS)
         self.server_protocol = "http"  # Default to HTTP
         self.server_url = f"{self.server_protocol}://localhost:5000"
+        self.server_ip = "localhost"
+        self.server_port = "5000"
         
         if getattr(sys, 'frozen', False):
             self.script_dir = Path(sys.executable).parent
@@ -334,6 +263,16 @@ class ServerLauncher:
             width=8,
             font=("Arial", 8)
         ).pack(side=tk.LEFT, padx=(0, 3))
+        
+        tk.Button(
+            model_select_frame,
+            text="🗑️ Delete",
+            command=self.delete_selected_model,
+            bg="#f44336",
+            fg="white",
+            width=8,
+            font=("Arial", 8)
+        ).pack(side=tk.LEFT)
         
         download_frame = tk.Frame(models_frame)
         download_frame.pack(fill=tk.X)
@@ -587,6 +526,16 @@ class ServerLauncher:
             width=12
         ).pack(side=tk.LEFT)
         
+        tk.Button(
+            log_btn_frame,
+            text="💾 Save Log",
+            command=self.save_log_to_file,
+            bg="#2196F3",
+            fg="white",
+            font=("Arial", 8),
+            width=12
+        ).pack(side=tk.LEFT, padx=(5, 0))
+        
         # Initial log message
         self.log("🎓 VR Training AI Server v6.2 - Ready")
         self.log("ℹ️ Click 'Start Server' to begin")
@@ -728,19 +677,60 @@ class ServerLauncher:
         self.downloading_model = model_name
         
         self.download_progress_frame.pack(fill=tk.X, pady=(5, 0))
-        self.download_progress_label.config(text=f"Downloading {model_name}...")
-        self.download_progress_bar.start(10)
+        self.download_progress_label.config(text=f"Downloading {model_name}... 0%")
+        self.download_progress_bar['mode'] = 'determinate'
+        self.download_progress_bar['value'] = 0
+        
+        def parse_progress(line):
+            """Parse Ollama download progress from output"""
+            try:
+                # Ollama outputs: "pulling manifest... 100%"
+                # or "downloading... 50%"
+                if '%' in line:
+                    parts = line.split()
+                    for part in parts:
+                        if '%' in part:
+                            percent = int(part.replace('%', ''))
+                            return percent
+            except:
+                pass
+            return None
         
         def do_download():
             try:
-                result = subprocess.run(
+                # FIXED: Use utf-8 encoding and errors='ignore' to handle Ollama's special characters
+                process = subprocess.Popen(
                     ['ollama', 'pull', model_name],
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
                     text=True,
-                    timeout=1800
+                    encoding='utf-8',
+                    errors='ignore',  # Ignore problematic characters instead of crashing
+                    bufsize=1
                 )
                 
-                if result.returncode == 0:
+                last_progress = 0
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    
+                    # Update progress bar
+                    progress = parse_progress(line)
+                    if progress is not None and progress != last_progress:
+                        last_progress = progress
+                        self.root.after(0, lambda p=progress: self.download_progress_bar.config(value=p))
+                        self.root.after(0, lambda p=progress: self.download_progress_label.config(
+                            text=f"Downloading {model_name}... {p}%"
+                        ))
+                    
+                    # Log important lines
+                    line_lower = line.lower().strip()
+                    if any(word in line_lower for word in ['pulling', 'downloading', 'verifying', 'success']):
+                        self.root.after(0, lambda l=line.strip(): self.log(f"  {l}"))
+                
+                process.wait()
+                
+                if process.returncode == 0:
                     self.log(f"✓ Downloaded: {model_name}")
                     self.root.after(0, lambda: self.on_download_complete(model_name, True))
                 else:
@@ -763,6 +753,66 @@ class ServerLauncher:
             self.refresh_models_list()
         else:
             messagebox.showerror("Error", f"Failed to download '{model_name}'")
+    
+    def delete_selected_model(self):
+        """Delete selected model from Ollama"""
+        selected = self.model_combo.get()
+        if not selected:
+            messagebox.showwarning("No Selection", "Select a model to delete first")
+            return
+        
+        # Don't allow deleting the active model
+        if selected == self.current_model:
+            messagebox.showerror(
+                "Cannot Delete Active Model",
+                f"'{selected}' is currently active.\n\n"
+                "Switch to another model first before deleting."
+            )
+            return
+        
+        # Confirm deletion
+        if selected in RECOMMENDED_MODELS:
+            info = RECOMMENDED_MODELS[selected]
+            msg = (
+                f"Delete model: {selected}\n\n"
+                f"Size: {info['size']}\n"
+                f"Category: {info['category']}\n\n"
+                "This will free up disk space but you'll need to\n"
+                "download it again if you want to use it later.\n\n"
+                "Continue?"
+            )
+        else:
+            msg = f"Delete model: {selected}\n\nCannot be undone. Continue?"
+        
+        result = messagebox.askyesno("Confirm Delete Model", msg)
+        if not result:
+            return
+        
+        self.log(f"🗑️ Deleting model: {selected}...")
+        
+        def do_delete():
+            try:
+                result = subprocess.run(
+                    ['ollama', 'rm', selected],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode == 0:
+                    self.log(f"✓ Deleted: {selected}")
+                    self.root.after(0, lambda: messagebox.showinfo("Success", f"Model '{selected}' deleted!"))
+                    self.root.after(0, self.refresh_models_list)
+                else:
+                    error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                    self.log(f"✗ Delete failed: {error_msg}")
+                    self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to delete model:\n{error_msg}"))
+                    
+            except Exception as e:
+                self.log(f"✗ Error: {e}")
+                self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        
+        threading.Thread(target=do_delete, daemon=True).start()
     
     def show_models_info(self):
         info_window = tk.Toplevel(self.root)
@@ -973,16 +1023,72 @@ class ServerLauncher:
             messagebox.showinfo("Success", f"Deleted {success_count} manual(s)")
             self.refresh_manuals_list()
     
+    def save_log_to_file(self):
+        """Save activity log to a file"""
+        try:
+            from datetime import datetime
+            
+            # Get log content
+            log_content = self.log_text.get("1.0", tk.END)
+            
+            if not log_content.strip():
+                messagebox.showinfo("Empty Log", "Activity log is empty")
+                return
+            
+            # Generate default filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"VR_Training_Server_Log_{timestamp}.txt"
+            
+            # Ask where to save
+            filepath = filedialog.asksaveasfilename(
+                title="Save Activity Log",
+                defaultextension=".txt",
+                filetypes=[
+                    ("Text files", "*.txt"),
+                    ("All files", "*.*")
+                ],
+                initialfile=default_filename
+            )
+            
+            if filepath:
+                # Write log to file
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(f"VR Training AI Server - Activity Log\n")
+                    f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("=" * 80 + "\n\n")
+                    f.write(log_content)
+                
+                self.log(f"✓ Log saved to: {filepath}")
+                messagebox.showinfo("Success", f"Log saved successfully!\n\n{filepath}")
+                
+        except Exception as e:
+            self.log(f"✗ Error saving log: {e}")
+            messagebox.showerror("Error", f"Could not save log:\n{str(e)}")
+    
     def clear_log(self):
         self.log_text.delete(1.0, tk.END)
     
     def update_status(self):
         if self.server_running:
             self.status_label.config(text="● Running", fg="green")
+            
+            # Obtener IP local
+            try:
+                hostname = socket.gethostname()
+                local_ip = socket.gethostbyname(hostname)
+                self.server_ip = local_ip
+            except:
+                self.server_ip = "localhost"
+            
+            # Actualizar etiqueta de IP
+            ip_text = f"IP: {self.server_ip}:{self.server_port}"
+            self.ip_label.config(text=ip_text, fg="#4CAF50")
+            
             self.btn_start.config(state=tk.DISABLED)
             self.btn_stop.config(state=tk.NORMAL)
         else:
             self.status_label.config(text="● Stopped", fg="red")
+            self.ip_label.config(text="IP: Not running", fg="#666")
             self.btn_start.config(state=tk.NORMAL)
             self.btn_stop.config(state=tk.DISABLED)
     
@@ -1033,12 +1139,31 @@ class ServerLauncher:
         except:
             pass
         
-        self.reset_progress()
+        self.progress_frame.pack(fill=tk.X, pady=(5, 0))
+        self.progress_bar['mode'] = 'determinate'
+        self.progress_bar['value'] = 0
+        self.progress_label.config(text="Starting indexing...")
+        
         self.log(f"📥 Indexing {self.selected_pdf.name}...")
-        self.update_progress(5, "Sending request...")
+        
+        def simulate_progress():
+            """Simulate progress while indexing"""
+            for i in range(10, 90, 5):
+                time.sleep(0.5)
+                if not self.indexing_in_progress:
+                    break
+                self.root.after(0, lambda p=i: self.progress_bar.config(value=p))
+                self.root.after(0, lambda p=i: self.progress_label.config(text=f"Processing pages... {p}%"))
         
         def do_index():
             try:
+                self.indexing_in_progress = True
+                
+                # Start progress simulation
+                progress_thread = threading.Thread(target=simulate_progress, daemon=True)
+                progress_thread.start()
+                
+                # Send indexing request
                 response = requests.post(
                     f"{self.server_url}/index",
                     json={"pdf_path": str(self.selected_pdf)},
@@ -1046,20 +1171,33 @@ class ServerLauncher:
                     verify=False
                 )
                 
+                self.indexing_in_progress = False
+                
                 if response.status_code == 200:
                     data = response.json()
-                    self.log(f"✓ Indexed {data.get('chunks', 0)} chunks")
-                    messagebox.showinfo("Success", f"Indexed!\nChunks: {data.get('chunks', 0)}")
+                    chunks = data.get('chunks', 0)
+                    pages = data.get('pages', 0)
+                    
+                    self.root.after(0, lambda: self.progress_bar.config(value=100))
+                    self.root.after(0, lambda: self.progress_label.config(text=f"Complete! {chunks} chunks, {pages} pages"))
+                    
+                    self.log(f"✓ Indexed {chunks} chunks from {pages} pages")
+                    
+                    # Hide progress after 2 seconds
+                    self.root.after(2000, self.progress_frame.pack_forget)
+                    
+                    messagebox.showinfo("Success", f"Indexed!\n\nChunks: {chunks}\nPages: {pages}")
                     self.refresh_manuals_list()
                 else:
                     error = response.json().get('error', 'Unknown')
                     self.log(f"✗ Error: {error}")
+                    self.root.after(0, self.progress_frame.pack_forget)
                     messagebox.showerror("Error", error)
-                    self.reset_progress()
             except Exception as e:
+                self.indexing_in_progress = False
                 self.log(f"✗ Error: {str(e)}")
+                self.root.after(0, self.progress_frame.pack_forget)
                 messagebox.showerror("Error", str(e))
-                self.reset_progress()
         
         threading.Thread(target=do_index, daemon=True).start()
     

@@ -1,503 +1,445 @@
 @echo off
-setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
+setlocal EnableDelayedExpansion
 
 :: ============================================================================
-:: TRAINING AI SERVER - Production Uninstallation Script
-:: Version: 3.0
-:: Description: Enterprise-grade uninstaller with data preservation options
+:: VR TRAINING AI SERVER - COMPLETE UNINSTALLER v2.1
+:: Removes everything: app files, Ollama models, databases, configs, registry
+:: With progress indicators in title bar
 :: ============================================================================
 
-:: ============================================================================
-:: CONFIGURATION
-:: ============================================================================
-set "SCRIPT_VERSION=3.0.0"
-set "APP_NAME=TRAINING AI SERVER"
-set "INSTALL_DIR=%~1"
-set "SILENT_MODE=%~2"
-
-:: Validate parameters
-if "%INSTALL_DIR%"=="" (
-    set "INSTALL_DIR=C:\Program Files\TRAINING AI SERVER"
-)
-
-:: Set paths
-set "LOG_DIR=%INSTALL_DIR%\logs"
-set "BACKUP_DIR=%USERPROFILE%\TrainingAIServer_Backup"
-
-:: Create timestamp
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
-set "TIMESTAMP=%datetime:~0,4%-%datetime:~4,2%-%datetime:~6,2%_%datetime:~8,2%-%datetime:~10,2%-%datetime:~12,2%"
-set "UNINSTALL_LOG=%TEMP%\training_ai_server_uninstall_%TIMESTAMP%.log"
-
-:: ============================================================================
-:: INITIALIZE LOGGING
-:: ============================================================================
-echo ======================================================================== > "%UNINSTALL_LOG%"
-echo  %APP_NAME% - UNINSTALLATION STARTED >> "%UNINSTALL_LOG%"
-echo  Version: %SCRIPT_VERSION% >> "%UNINSTALL_LOG%"
-echo  Timestamp: %TIMESTAMP% >> "%UNINSTALL_LOG%"
-echo ======================================================================== >> "%UNINSTALL_LOG%"
-echo. >> "%UNINSTALL_LOG%"
-
-call :LOG "Uninstallation initiated"
-
-:: ============================================================================
-:: CONFIRMATION DIALOG
-:: ============================================================================
-
-if not "%SILENT_MODE%"=="/SILENT" (
-    call :LOG "Showing confirmation dialog to user"
-    
-    :: Show graphical confirmation using PowerShell
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$result = [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); ^
-     $result = [System.Windows.Forms.MessageBox]::Show( ^
-         'This will completely remove TRAINING AI SERVER and ALL associated data including:' + [Environment]::NewLine + [Environment]::NewLine + ^
-         '• AI models and cached data (~2GB)' + [Environment]::NewLine + ^
-         '• All configuration files' + [Environment]::NewLine + ^
-         '• Indexed manuals database' + [Environment]::NewLine + ^
-         '• Firewall rules' + [Environment]::NewLine + ^
-         '• All logs and temporary files' + [Environment]::NewLine + ^
-         '• Desktop shortcuts' + [Environment]::NewLine + [Environment]::NewLine + ^
-         'This action cannot be undone!' + [Environment]::NewLine + [Environment]::NewLine + ^
-         'Would you like to create a backup of your data before uninstalling?', ^
-         'TRAINING AI SERVER - Confirm Uninstall', ^
-         'YesNoCancel', ^
-         'Warning' ^
-     ); ^
-     if ($result -eq 'Cancel') { exit 2 } ^
-     elseif ($result -eq 'Yes') { exit 0 } ^
-     else { exit 1 }"
-    
-    set "DIALOG_RESULT=!ERRORLEVEL!"
-    
-    if !DIALOG_RESULT! equ 2 (
-        call :LOG "User cancelled uninstallation"
-        echo Uninstallation cancelled by user. >> "%UNINSTALL_LOG%"
-        exit /b 0
-    )
-    
-    if !DIALOG_RESULT! equ 0 (
-        call :LOG "User requested data backup"
-        set "CREATE_BACKUP=1"
-    ) else (
-        call :LOG "User declined data backup"
-        set "CREATE_BACKUP=0"
-    )
-) else (
-    call :LOG "Silent mode - no confirmation dialog"
-    set "CREATE_BACKUP=0"
-)
-
-:: ============================================================================
-:: DATA BACKUP (if requested)
-:: ============================================================================
-
-if !CREATE_BACKUP! equ 1 (
-    call :LOG "Creating data backup..."
-    call :BACKUP_USER_DATA
-    if !ERRORLEVEL! equ 0 (
-        call :LOG "Backup completed successfully: %BACKUP_DIR%"
-    ) else (
-        call :LOG "WARNING: Backup failed but continuing with uninstall"
-    )
-)
-
-:: ============================================================================
-:: PHASE 1: STOP ALL PROCESSES
-:: ============================================================================
-
-call :LOG "[PHASE 1] Stopping running processes"
-call :LOG "--------------------------------------"
-
-:: Stop Python processes (offline_server.py, launcher.py)
-call :LOG "Stopping Python server processes..."
-taskkill /FI "IMAGENAME eq python.exe" /FI "WINDOWTITLE eq *offline_server*" /T /F >> "%UNINSTALL_LOG%" 2>&1
-timeout /t 2 /nobreak >nul
-
-taskkill /IM python.exe /F >> "%UNINSTALL_LOG%" 2>&1
-taskkill /IM pythonw.exe /F >> "%UNINSTALL_LOG%" 2>&1
-timeout /t 2 /nobreak >nul
-
-:: Stop Ollama processes
-call :LOG "Stopping Ollama service..."
-taskkill /IM ollama.exe /F >> "%UNINSTALL_LOG%" 2>&1
-taskkill /IM ollama_llama_server.exe /F >> "%UNINSTALL_LOG%" 2>&1
-timeout /t 2 /nobreak >nul
-
-:: Wait for processes to fully terminate
-call :LOG "Waiting for processes to terminate..."
-timeout /t 3 /nobreak >nul
-
-:: Verify processes are stopped
-tasklist | findstr /I "python.exe ollama.exe" >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    call :LOG "WARNING: Some processes still running, forcing termination..."
-    taskkill /F /IM python.exe /T >> "%UNINSTALL_LOG%" 2>&1
-    taskkill /F /IM ollama.exe /T >> "%UNINSTALL_LOG%" 2>&1
-    timeout /t 3 /nobreak >nul
-)
-
-call :LOG "All processes stopped"
-
-:: ============================================================================
-:: PHASE 2: REMOVE FIREWALL RULES
-:: ============================================================================
-
-call :LOG "[PHASE 2] Removing firewall rules"
-call :LOG "-----------------------------------"
-
-:: Remove all firewall rules for the application
-call :LOG "Removing inbound rule..."
-netsh advfirewall firewall delete rule name="TRAINING AI SERVER" >> "%UNINSTALL_LOG%" 2>&1
-
-call :LOG "Removing outbound rule (if exists)..."
-netsh advfirewall firewall delete rule name="TRAINING AI SERVER Out" >> "%UNINSTALL_LOG%" 2>&1
-
-:: Verify removal
-netsh advfirewall firewall show rule name="TRAINING AI SERVER" >nul 2>&1
-if !ERRORLEVEL! neq 0 (
-    call :LOG "Firewall rules removed successfully"
-) else (
-    call :LOG "WARNING: Some firewall rules may still exist"
-)
-
-:: ============================================================================
-:: PHASE 3: REMOVE SHORTCUTS
-:: ============================================================================
-
-call :LOG "[PHASE 3] Removing shortcuts"
-call :LOG "-----------------------------"
-
-:: Remove desktop shortcut
-set "DESKTOP=%USERPROFILE%\Desktop"
-if exist "%DESKTOP%\TRAINING AI SERVER.lnk" (
-    del /f /q "%DESKTOP%\TRAINING AI SERVER.lnk" >> "%UNINSTALL_LOG%" 2>&1
-    call :LOG "Desktop shortcut removed"
-)
-
-:: Remove Start Menu shortcuts
-set "STARTMENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
-if exist "%STARTMENU%\TRAINING AI SERVER" (
-    rd /s /q "%STARTMENU%\TRAINING AI SERVER" >> "%UNINSTALL_LOG%" 2>&1
-    call :LOG "Start Menu shortcuts removed"
-)
-
-:: Remove Quick Launch (if exists)
-set "QUICKLAUNCH=%APPDATA%\Microsoft\Internet Explorer\Quick Launch"
-if exist "%QUICKLAUNCH%\TRAINING AI SERVER.lnk" (
-    del /f /q "%QUICKLAUNCH%\TRAINING AI SERVER.lnk" >> "%UNINSTALL_LOG%" 2>&1
-    call :LOG "Quick Launch shortcut removed"
-)
-
-:: Remove Taskbar pin (Windows 10/11)
-powershell -NoProfile -Command ^
-    "$shell = New-Object -ComObject Shell.Application; ^
-     $folder = $shell.Namespace('%DESKTOP%'); ^
-     $item = $folder.ParseName('TRAINING AI SERVER.lnk'); ^
-     if ($item) { $item.InvokeVerb('taskbarunpin') }" >> "%UNINSTALL_LOG%" 2>&1
-
-call :LOG "All shortcuts processed"
-
-:: ============================================================================
-:: PHASE 4: REMOVE OLLAMA COMPLETELY
-:: ============================================================================
-
-call :LOG "[PHASE 4] Removing Ollama installation"
-call :LOG "---------------------------------------"
-
-:: Remove Ollama user data
-if exist "%USERPROFILE%\.ollama" (
-    call :LOG "Removing Ollama user data: %USERPROFILE%\.ollama"
-    rd /s /q "%USERPROFILE%\.ollama" >> "%UNINSTALL_LOG%" 2>&1
-    if exist "%USERPROFILE%\.ollama" (
-        call :LOG "WARNING: Failed to remove some Ollama user data"
-    ) else (
-        call :LOG "Ollama user data removed"
-    )
-)
-
-:: Remove Ollama program files
-if exist "C:\Program Files\Ollama" (
-    call :LOG "Removing Ollama from Program Files"
-    rd /s /q "C:\Program Files\Ollama" >> "%UNINSTALL_LOG%" 2>&1
-    if exist "C:\Program Files\Ollama" (
-        call :LOG "WARNING: Failed to remove Ollama Program Files"
-    ) else (
-        call :LOG "Ollama Program Files removed"
-    )
-)
-
-:: Remove Ollama (x86) if exists
-if exist "C:\Program Files (x86)\Ollama" (
-    call :LOG "Removing Ollama from Program Files (x86)"
-    rd /s /q "C:\Program Files (x86)\Ollama" >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Remove Ollama ProgramData
-if exist "C:\ProgramData\Ollama" (
-    call :LOG "Removing Ollama ProgramData"
-    rd /s /q "C:\ProgramData\Ollama" >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Remove Ollama from PATH (if present)
-call :LOG "Cleaning Ollama from PATH environment variable"
-call :REMOVE_FROM_PATH "Ollama"
-
-:: Remove Ollama registry keys
-call :LOG "Removing Ollama registry entries"
-reg delete "HKCU\Software\Ollama" /f >> "%UNINSTALL_LOG%" 2>&1
-reg delete "HKLM\Software\Ollama" /f >> "%UNINSTALL_LOG%" 2>&1
-
-call :LOG "Ollama completely removed"
-
-:: ============================================================================
-:: PHASE 5: REMOVE APPLICATION FILES
-:: ============================================================================
-
-call :LOG "[PHASE 5] Removing application files"
-call :LOG "--------------------------------------"
-
-:: Remove main installation directory
-if exist "%INSTALL_DIR%" (
-    call :LOG "Removing: %INSTALL_DIR%"
-    
-    :: First try normal deletion
-    rd /s /q "%INSTALL_DIR%" >> "%UNINSTALL_LOG%" 2>&1
-    
-    :: If still exists, try with takeown
-    if exist "%INSTALL_DIR%" (
-        call :LOG "Attempting forced removal with takeown..."
-        takeown /f "%INSTALL_DIR%" /r /d y >> "%UNINSTALL_LOG%" 2>&1
-        icacls "%INSTALL_DIR%" /grant administrators:F /t >> "%UNINSTALL_LOG%" 2>&1
-        rd /s /q "%INSTALL_DIR%" >> "%UNINSTALL_LOG%" 2>&1
-    )
-    
-    :: Final check
-    if exist "%INSTALL_DIR%" (
-        call :LOG "WARNING: Some files could not be removed. They may be in use."
-        call :LOG "         Manual cleanup may be required: %INSTALL_DIR%"
-    ) else (
-        call :LOG "Application files removed successfully"
-    )
-) else (
-    call :LOG "Installation directory not found, skipping"
-)
-
-:: ============================================================================
-:: PHASE 6: REMOVE REGISTRY ENTRIES
-:: ============================================================================
-
-call :LOG "[PHASE 6] Removing registry entries"
-call :LOG "------------------------------------"
-
-:: Remove application registry keys
-call :LOG "Removing application registry keys..."
-reg delete "HKLM\Software\TrainingAIServer" /f >> "%UNINSTALL_LOG%" 2>&1
-reg delete "HKCU\Software\TrainingAIServer" /f >> "%UNINSTALL_LOG%" 2>&1
-
-:: Remove uninstall entry
-reg delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\{B4F8D7E3-9A2C-4E1D-8F3B-7C6D5E4F3A2B}_is1" /f >> "%UNINSTALL_LOG%" 2>&1
-
-call :LOG "Registry entries removed"
-
-:: ============================================================================
-:: PHASE 7: CLEANUP TEMP FILES
-:: ============================================================================
-
-call :LOG "[PHASE 7] Cleaning temporary files"
-call :LOG "-----------------------------------"
-
-:: Remove temp files
-if exist "%TEMP%\training_ai_*" (
-    del /f /q "%TEMP%\training_ai_*" >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Remove Python cache
-if exist "%LOCALAPPDATA%\Temp\pip-*" (
-    rd /s /q "%LOCALAPPDATA%\Temp\pip-*" >> "%UNINSTALL_LOG%" 2>&1
-)
-
-call :LOG "Temporary files cleaned"
-
-:: ============================================================================
-:: PHASE 8: VERIFICATION
-:: ============================================================================
-
-call :LOG "[PHASE 8] Verifying uninstallation"
-call :LOG "-----------------------------------"
-
-set "ISSUES=0"
-
-:: Check if processes are still running
-tasklist | findstr /I "python.exe ollama.exe" >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    call :LOG "WARNING: Some processes are still running"
-    set /a ISSUES+=1
-)
-
-:: Check if installation directory still exists
-if exist "%INSTALL_DIR%" (
-    call :LOG "WARNING: Installation directory still exists"
-    set /a ISSUES+=1
-)
-
-:: Check if Ollama directory still exists
-if exist "%USERPROFILE%\.ollama" (
-    call :LOG "WARNING: Ollama user directory still exists"
-    set /a ISSUES+=1
-)
-
-:: Check if registry keys still exist
-reg query "HKLM\Software\TrainingAIServer" >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    call :LOG "WARNING: Registry keys still exist"
-    set /a ISSUES+=1
-)
-
-:: Check if firewall rules still exist
-netsh advfirewall firewall show rule name="TRAINING AI SERVER" >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    call :LOG "WARNING: Firewall rules still exist"
-    set /a ISSUES+=1
-)
-
-if !ISSUES! equ 0 (
-    call :LOG "Verification passed - clean uninstallation"
-) else (
-    call :LOG "WARNING: Verification found !ISSUES! issue(s)"
-    call :LOG "         Some manual cleanup may be required"
-)
-
-:: ============================================================================
-:: COMPLETION
-:: ============================================================================
-
-call :LOG ""
-call :LOG "========================================================================"
-call :LOG " UNINSTALLATION COMPLETED"
-call :LOG " Time: %TIME%"
-call :LOG " Log: %UNINSTALL_LOG%"
-if !CREATE_BACKUP! equ 1 (
-    call :LOG " Backup: %BACKUP_DIR%"
-)
-call :LOG "========================================================================"
-
-:: Copy log to user-accessible location
-if exist "%USERPROFILE%\Desktop" (
-    copy /y "%UNINSTALL_LOG%" "%USERPROFILE%\Desktop\uninstall_log_%TIMESTAMP%.txt" >nul 2>&1
-    call :LOG "Log copied to desktop for reference"
-)
-
-:: Show completion message (non-silent mode)
-if not "%SILENT_MODE%"=="/SILENT" (
-    powershell -NoProfile -Command ^
-    "$message = 'TRAINING AI SERVER has been uninstalled.' + [Environment]::NewLine + [Environment]::NewLine; ^
-     if (!ISSUES! -gt 0) { ^
-         $message += 'Note: Some components could not be removed automatically.' + [Environment]::NewLine + ^
-                     'Please check the log file on your desktop for details.' + [Environment]::NewLine + [Environment]::NewLine; ^
-     } ^
-     if (!CREATE_BACKUP! -eq 1) { ^
-         $message += 'Your data has been backed up to:' + [Environment]::NewLine + ^
-                     '%BACKUP_DIR%' + [Environment]::NewLine + [Environment]::NewLine; ^
-     } ^
-     $message += 'Log file: %UNINSTALL_LOG%'; ^
-     [System.Windows.Forms.MessageBox]::Show($message, 'Uninstallation Complete', 'OK', 'Information')" >> "%UNINSTALL_LOG%" 2>&1
-)
-
-exit /b 0
-
-:: ============================================================================
-:: FUNCTIONS
-:: ============================================================================
-
-:LOG
-:: Log message with timestamp
-echo [%TIME%] %~1 >> "%UNINSTALL_LOG%"
-exit /b 0
-
-:BACKUP_USER_DATA
-:: Backup user configuration and data
-call :LOG "Creating backup directory: %BACKUP_DIR%"
-
-if not exist "%BACKUP_DIR%" (
-    mkdir "%BACKUP_DIR%" >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Backup configuration files
-if exist "%INSTALL_DIR%\config" (
-    call :LOG "Backing up configuration files..."
-    xcopy "%INSTALL_DIR%\config\*.*" "%BACKUP_DIR%\config\" /E /I /Y >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Backup manuals (if not too large)
-if exist "%INSTALL_DIR%\manuals" (
-    call :LOG "Backing up PDF manuals..."
-    xcopy "%INSTALL_DIR%\manuals\*.pdf" "%BACKUP_DIR%\manuals\" /I /Y >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Backup database
-if exist "%INSTALL_DIR%\server\chroma_db" (
-    call :LOG "Backing up indexed database..."
-    xcopy "%INSTALL_DIR%\server\chroma_db\*.*" "%BACKUP_DIR%\database\" /E /I /Y >> "%UNINSTALL_LOG%" 2>&1
-)
-
-:: Backup logs (last 10 most recent)
-if exist "%INSTALL_DIR%\logs\*.log" (
-    call :LOG "Backing up recent logs..."
-    for /f "tokens=*" %%f in ('dir /b /o-d "%INSTALL_DIR%\logs\*.log" ^| more +10') do (
-        xcopy "%%f" "%BACKUP_DIR%\logs\" /I /Y >> "%UNINSTALL_LOG%" 2>&1
-    )
-)
-
-:: Create backup info file
-(
-    echo TRAINING AI SERVER - Backup Information
-    echo =======================================
-    echo Backup Date: %DATE% %TIME%
-    echo Original Location: %INSTALL_DIR%
+title VR Training AI Server - Complete Uninstaller - Starting...
+
+color 0C
+echo.
+echo ════════════════════════════════════════════════════════════════════════
+echo                   VR TRAINING AI SERVER
+echo                   COMPLETE UNINSTALLER v2.1
+echo ════════════════════════════════════════════════════════════════════════
+echo.
+color 0F
+
+:: Check for admin privileges
+net session >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    color 0C
+    echo [ERROR] Administrator privileges required!
     echo.
-    echo Contents:
-    echo - Configuration files
-    echo - PDF Manuals
-    echo - Indexed database
-    echo - Recent logs
+    echo Please right-click this script and select "Run as Administrator"
     echo.
-    echo To restore, copy these files to your new installation
-) > "%BACKUP_DIR%\BACKUP_INFO.txt"
+    pause
+    exit /b 1
+)
 
-call :LOG "Backup completed: %BACKUP_DIR%"
-exit /b 0
+echo [INFO] This will permanently remove:
+echo.
+echo   ✓ VR Training AI Server application
+echo   ✓ All indexed manuals and PDFs
+echo   ✓ ChromaDB vector database
+echo   ✓ Server configuration files
+echo   ✓ All downloaded Ollama AI models
+echo   ✓ Ollama application (optional)
+echo   ✓ Desktop shortcuts
+echo   ✓ Start Menu entries
+echo   ✓ Firewall rules
+echo   ✓ Registry entries
+echo.
+color 0E
+echo WARNING: This CANNOT be undone!
+color 0F
+echo.
 
-:REMOVE_FROM_PATH
-:: Remove a path component from PATH environment variable
-set "SEARCH_PATH=%~1"
-setlocal enabledelayedexpansion
+set /p CONFIRM="Are you sure you want to continue? (YES/no): "
+if /i not "!CONFIRM!"=="YES" (
+    echo.
+    echo Uninstallation cancelled.
+    pause
+    exit /b 0
+)
 
-:: Get current PATH
-for /f "skip=2 tokens=1,*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USER_PATH=%%b"
-for /f "skip=2 tokens=1,*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYSTEM_PATH=%%b"
+echo.
+echo ════════════════════════════════════════════════════════════════════════
+echo Starting complete uninstallation...
+echo ════════════════════════════════════════════════════════════════════════
+echo.
 
-:: Remove from user PATH
-set "NEW_USER_PATH="
-for %%p in ("%USER_PATH:;=" "%") do (
-    set "PART=%%~p"
-    echo !PART! | findstr /I /C:"%SEARCH_PATH%" >nul 2>&1
-    if !ERRORLEVEL! neq 0 (
-        if defined NEW_USER_PATH (
-            set "NEW_USER_PATH=!NEW_USER_PATH!;!PART!"
+:: ============================================================================
+:: PHASE 1: Stop running processes
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [1/8] Stopping processes
+
+echo [PHASE 1/8] Stopping running processes...
+echo.
+
+echo   [1.1] Stopping Python launcher...
+tasklist | findstr /i "python.exe.*launcher" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    taskkill /F /IM python.exe /FI "WINDOWTITLE eq *launcher*" >nul 2>&1
+    echo   [OK] Launcher stopped
+) else (
+    echo   [SKIP] Launcher not running
+)
+
+echo   [1.2] Stopping server processes...
+tasklist | findstr /i "python.exe.*offline_server" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    taskkill /F /IM python.exe /FI "WINDOWTITLE eq *offline_server*" >nul 2>&1
+    echo   [OK] Server stopped
+) else (
+    echo   [SKIP] Server not running
+)
+
+echo   [1.3] Stopping Ollama service...
+tasklist | findstr /i "ollama.exe" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    taskkill /F /IM ollama.exe >nul 2>&1
+    timeout /t 2 /nobreak >nul
+    echo   [OK] Ollama stopped
+) else (
+    echo   [SKIP] Ollama not running
+)
+
+echo.
+
+:: ============================================================================
+:: PHASE 2: Delete Ollama models
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [2/8] Deleting AI models
+echo [PHASE 2/8] Deleting Ollama AI models...
+echo.
+
+where ollama.exe >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [INFO] Listing installed models...
+    
+    :: Get list of models
+    set MODEL_COUNT=0
+    for /f "skip=1 tokens=1" %%m in ('ollama list 2^>nul') do (
+        set /a MODEL_COUNT+=1
+        echo   [!MODEL_COUNT!] Deleting: %%m
+        ollama rm %%m >nul 2>&1
+        if !ERRORLEVEL! equ 0 (
+            echo       [OK] Deleted
         ) else (
-            set "NEW_USER_PATH=!PART!"
+            echo       [WARN] Could not delete
         )
     )
+    
+    if !MODEL_COUNT! equ 0 (
+        echo   [SKIP] No models found
+    ) else (
+        echo   [OK] Deleted !MODEL_COUNT! model(s)
+    )
+) else (
+    echo   [SKIP] Ollama not installed
 )
 
-:: Update registry if changed
-if not "!NEW_USER_PATH!"=="!USER_PATH!" (
-    reg add "HKCU\Environment" /v Path /t REG_EXPAND_SZ /d "!NEW_USER_PATH!" /f >> "%UNINSTALL_LOG%" 2>&1
-    call :LOG "PATH updated - Ollama removed"
+echo.
+
+:: ============================================================================
+:: PHASE 3: Delete application files
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [3/8] Removing app files
+echo [PHASE 3/8] Deleting application files...
+echo.
+
+:: Get installation directory from registry or use default
+set "INSTALL_DIR="
+for /f "tokens=2*" %%a in ('reg query "HKLM\SOFTWARE\VR Training AI Server" /v InstallPath 2^>nul ^| findstr InstallPath') do (
+    set "INSTALL_DIR=%%b"
 )
 
-endlocal
+:: Fallback to common locations
+if "%INSTALL_DIR%"=="" (
+    if exist "%ProgramFiles%\VR Training AI Server" (
+        set "INSTALL_DIR=%ProgramFiles%\VR Training AI Server"
+    ) else if exist "%LocalAppData%\VR Training AI Server" (
+        set "INSTALL_DIR=%LocalAppData%\VR Training AI Server"
+    ) else if exist "C:\VR Training AI Server" (
+        set "INSTALL_DIR=C:\VR Training AI Server"
+    )
+)
+
+if not "%INSTALL_DIR%"=="" (
+    if exist "%INSTALL_DIR%" (
+        echo   [INFO] Removing: %INSTALL_DIR%
+        
+        :: Try normal deletion first
+        rd /s /q "%INSTALL_DIR%" >nul 2>&1
+        
+        :: If that fails, try with takeown
+        if exist "%INSTALL_DIR%" (
+            echo   [INFO] Forcing deletion with elevated permissions...
+            takeown /f "%INSTALL_DIR%" /r /d y >nul 2>&1
+            icacls "%INSTALL_DIR%" /grant administrators:F /t >nul 2>&1
+            rd /s /q "%INSTALL_DIR%" >nul 2>&1
+        )
+        
+        if not exist "%INSTALL_DIR%" (
+            echo   [OK] Application files deleted
+        ) else (
+            echo   [WARN] Could not delete all files (may be in use)
+        )
+    ) else (
+        echo   [SKIP] Installation directory not found
+    )
+) else (
+    echo   [SKIP] Installation path not found in registry
+)
+
+echo.
+
+:: ============================================================================
+:: PHASE 4: Delete user data (manuals, database, configs)
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [4/8] Cleaning user data
+echo [PHASE 4/8] Deleting user data...
+echo.
+
+:: ChromaDB data
+set "CHROMA_DIR=%USERPROFILE%\.chroma"
+if exist "%CHROMA_DIR%" (
+    echo   [4.1] Deleting ChromaDB: %CHROMA_DIR%
+    rd /s /q "%CHROMA_DIR%" >nul 2>&1
+    if not exist "%CHROMA_DIR%" (
+        echo   [OK] ChromaDB deleted
+    )
+) else (
+    echo   [SKIP] ChromaDB not found
+)
+
+:: Ollama data directory
+set "OLLAMA_DIR=%USERPROFILE%\.ollama"
+if exist "%OLLAMA_DIR%" (
+    echo   [4.2] Deleting Ollama data: %OLLAMA_DIR%
+    rd /s /q "%OLLAMA_DIR%" >nul 2>&1
+    if not exist "%OLLAMA_DIR%" (
+        echo   [OK] Ollama data deleted
+    )
+) else (
+    echo   [SKIP] Ollama data not found
+)
+
+:: App data directory
+set "APPDATA_DIR=%APPDATA%\VR Training AI Server"
+if exist "%APPDATA_DIR%" (
+    echo   [4.3] Deleting app data: %APPDATA_DIR%
+    rd /s /q "%APPDATA_DIR%" >nul 2>&1
+    if not exist "%APPDATA_DIR%" (
+        echo   [OK] App data deleted
+    )
+) else (
+    echo   [SKIP] App data not found
+)
+
+:: Local app data directory
+set "LOCALAPPDATA_DIR=%LOCALAPPDATA%\VR Training AI Server"
+if exist "%LOCALAPPDATA_DIR%" (
+    echo   [4.4] Deleting local app data: %LOCALAPPDATA_DIR%
+    rd /s /q "%LOCALAPPDATA_DIR%" >nul 2>&1
+    if not exist "%LOCALAPPDATA_DIR%" (
+        echo   [OK] Local app data deleted
+    )
+) else (
+    echo   [SKIP] Local app data not found
+)
+
+echo.
+
+:: ============================================================================
+:: PHASE 5: Delete shortcuts and Start Menu entries
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [5/8] Removing shortcuts
+echo [PHASE 5/8] Deleting shortcuts...
+echo.
+
+:: Desktop shortcut
+set "DESKTOP_SHORTCUT=%USERPROFILE%\Desktop\VR Training AI Server.lnk"
+if exist "%DESKTOP_SHORTCUT%" (
+    echo   [5.1] Deleting desktop shortcut
+    del /f /q "%DESKTOP_SHORTCUT%" >nul 2>&1
+    echo   [OK] Desktop shortcut deleted
+) else (
+    echo   [SKIP] Desktop shortcut not found
+)
+
+:: Start Menu folder
+set "STARTMENU_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\VR Training AI Server"
+if exist "%STARTMENU_DIR%" (
+    echo   [5.2] Deleting Start Menu folder
+    rd /s /q "%STARTMENU_DIR%" >nul 2>&1
+    echo   [OK] Start Menu folder deleted
+) else (
+    echo   [SKIP] Start Menu folder not found
+)
+
+:: Public Desktop shortcut
+set "PUBLIC_DESKTOP=%PUBLIC%\Desktop\VR Training AI Server.lnk"
+if exist "%PUBLIC_DESKTOP%" (
+    echo   [5.3] Deleting public desktop shortcut
+    del /f /q "%PUBLIC_DESKTOP%" >nul 2>&1
+    echo   [OK] Public desktop shortcut deleted
+) else (
+    echo   [SKIP] Public desktop shortcut not found
+)
+
+echo.
+
+:: ============================================================================
+:: PHASE 6: Remove firewall rules
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [6/8] Firewall cleanup
+echo [PHASE 6/8] Removing firewall rules...
+echo.
+
+netsh advfirewall firewall show rule name="VR Manual Server" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [6.1] Removing firewall rule: VR Manual Server
+    netsh advfirewall firewall delete rule name="VR Manual Server" >nul 2>&1
+    echo   [OK] Firewall rule removed
+) else (
+    echo   [SKIP] Firewall rule not found
+)
+
+netsh advfirewall firewall show rule name="VR Manual Server Out" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [6.2] Removing firewall rule: VR Manual Server Out
+    netsh advfirewall firewall delete rule name="VR Manual Server Out" >nul 2>&1
+    echo   [OK] Firewall rule removed
+) else (
+    echo   [SKIP] Outbound firewall rule not found
+)
+
+netsh advfirewall firewall show rule name="TRAINING AI SERVER" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [6.3] Removing firewall rule: TRAINING AI SERVER
+    netsh advfirewall firewall delete rule name="TRAINING AI SERVER" >nul 2>&1
+    echo   [OK] Firewall rule removed
+) else (
+    echo   [SKIP] TRAINING AI SERVER rule not found
+)
+
+echo.
+
+:: ============================================================================
+:: PHASE 7: Delete registry entries
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [7/8] Registry cleanup
+echo [PHASE 7/8] Deleting registry entries...
+echo.
+
+:: Application registry key
+reg query "HKLM\SOFTWARE\VR Training AI Server" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [7.1] Deleting registry key: HKLM\SOFTWARE\VR Training AI Server
+    reg delete "HKLM\SOFTWARE\VR Training AI Server" /f >nul 2>&1
+    echo   [OK] Registry key deleted
+) else (
+    echo   [SKIP] Registry key not found
+)
+
+:: Uninstall registry key
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\VR Training AI Server" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [7.2] Deleting uninstall registry key
+    reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\VR Training AI Server" /f >nul 2>&1
+    echo   [OK] Uninstall key deleted
+) else (
+    echo   [SKIP] Uninstall key not found
+)
+
+:: User registry keys
+reg query "HKCU\SOFTWARE\VR Training AI Server" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo   [7.3] Deleting user registry key
+    reg delete "HKCU\SOFTWARE\VR Training AI Server" /f >nul 2>&1
+    echo   [OK] User registry key deleted
+) else (
+    echo   [SKIP] User registry key not found
+)
+
+echo.
+
+:: ============================================================================
+:: PHASE 8: Optional - Uninstall Ollama
+:: ============================================================================
+
+title VR Training AI Server - Uninstalling... [8/8] Optional: Ollama
+echo [PHASE 8/8] Uninstall Ollama application?
+echo.
+echo   Ollama is used by other applications too.
+echo   Only uninstall if you're sure you don't need it.
+echo.
+
+set /p UNINSTALL_OLLAMA="Uninstall Ollama? (yes/NO): "
+if /i "!UNINSTALL_OLLAMA!"=="yes" (
+    echo.
+    echo   [8.1] Uninstalling Ollama...
+    
+    :: Try using winget first
+    where winget >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        winget uninstall ollama.ollama --silent >nul 2>&1
+        if !ERRORLEVEL! equ 0 (
+            echo   [OK] Ollama uninstalled via winget
+        ) else (
+            echo   [WARN] winget uninstall failed, trying manual removal
+            
+            :: Manual removal
+            set "OLLAMA_PATH="
+            for /f "delims=" %%p in ('where ollama.exe 2^>nul') do set "OLLAMA_PATH=%%~dp0"
+            
+            if not "!OLLAMA_PATH!"==" " (
+                echo   [INFO] Removing: !OLLAMA_PATH!
+                rd /s /q "!OLLAMA_PATH!" >nul 2>&1
+                echo   [OK] Ollama directory removed
+            )
+        )
+    ) else (
+        echo   [WARN] winget not available, manual removal required
+        echo   [INFO] You can uninstall Ollama from Add/Remove Programs
+    )
+) else (
+    echo   [SKIP] Keeping Ollama installed
+)
+
+echo.
+title VR Training AI Server - Uninstall Complete!
+echo ════════════════════════════════════════════════════════════════════════
+echo                   UNINSTALLATION COMPLETED!
+echo ════════════════════════════════════════════════════════════════════════
+echo.
+
+:: Summary
+echo [SUMMARY]
+echo.
+echo The following have been removed:
+echo   ✓ Application files
+echo   ✓ Indexed manuals and PDFs
+echo   ✓ Vector database (ChromaDB)
+echo   ✓ Configuration files
+echo   ✓ Ollama AI models
+echo   ✓ Desktop shortcuts
+echo   ✓ Start Menu entries
+echo   ✓ Firewall rules
+echo   ✓ Registry entries
+echo.
+
+if /i "!UNINSTALL_OLLAMA!"=="yes" (
+    echo   ✓ Ollama application
+    echo.
+)
+
+echo VR Training AI Server has been completely uninstalled.
+echo.
+echo Thank you for using VR Training AI Server!
+echo.
+pause
 exit /b 0
