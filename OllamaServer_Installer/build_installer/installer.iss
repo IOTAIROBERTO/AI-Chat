@@ -51,6 +51,8 @@ Source: "payload\installer\uninstaller_cleanup.bat"; DestDir: "{app}\installer";
 Source: "scripts\firewall_add.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "scripts\firewall_remove.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "payload\utils\firewall_config.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "payload\installer\configure_security.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "payload\utils\diagnose_connection.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; Launcher scripts
 Source: "payload\start_server.bat"; DestDir: "{app}"; Flags: ignoreversion

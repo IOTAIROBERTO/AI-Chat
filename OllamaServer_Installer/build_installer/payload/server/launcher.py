@@ -119,6 +119,10 @@ class ServerLauncher:
         self.server_script = self.script_dir / "offline_server.py"
         self.config_file = self.script_dir / "server_config.json"
         
+        # Log directory
+        self.log_dir = self.script_dir.parent / "logs"
+        self.log_dir.mkdir(exist_ok=True)
+        
         self.load_config()
         self.create_widgets()
         self.update_status()
@@ -127,18 +131,28 @@ class ServerLauncher:
         self.auto_refresh_models()
         
     def detect_server_protocol(self):
-        """Auto-detect if server is using HTTP or HTTPS"""
-        for protocol in ['https', 'http']:
-            try:
-                url = f"{protocol}://localhost:5000/health"
-                response = requests.get(url, timeout=2, verify=False)
-                if response.status_code == 200:
-                    self.server_protocol = protocol
-                    self.server_url = f"{protocol}://localhost:5000"
-                    self.log(f"ℹ️ Server protocol detected: {protocol.upper()}")
-                    return True
-            except:
-                continue
+        """Auto-detect if server is using HTTP or HTTPS and correct PORT"""
+        # Reload config to get latest port
+        self.load_config()
+        
+        # Try configured port first, then range
+        ports_to_try = [self.server_port]
+        if str(self.server_port) != "5000":
+             ports_to_try.append(5000)
+             
+        for port in ports_to_try:
+            for protocol in ['https', 'http']:
+                try:
+                    url = f"{protocol}://localhost:{port}/health"
+                    response = requests.get(url, timeout=2, verify=False)
+                    if response.status_code == 200:
+                        self.server_protocol = protocol
+                        self.server_port = str(port)
+                        self.server_url = f"{protocol}://localhost:{port}"
+                        self.log(f"ℹ️ Server detected: {protocol.upper()} on Port {port}")
+                        return True
+                except:
+                    continue
         return False
         
     def load_config(self):
@@ -148,10 +162,13 @@ class ServerLauncher:
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
                     self.current_model = config.get('current_model', 'qwen2.5:1.5b')
+                    self.server_port = config.get('port', 5000)
             else:
                 self.current_model = 'qwen2.5:1.5b'
+                self.server_port = 5000
         except:
             self.current_model = 'qwen2.5:1.5b'
+            self.server_port = 5000
     
     def save_config(self):
         """Save server configuration"""
@@ -1094,13 +1111,12 @@ class ServerLauncher:
     
     def browse_pdf(self):
         manuals_dir = self.script_dir.parent / "manuals"
-        if not manuals_dir.exists():
-            manuals_dir = Path.home()
+        initial_dir = manuals_dir if manuals_dir.exists() else Path.home()
         
         filename = filedialog.askopenfilename(
             title="Select PDF Manual",
-            initialdir=str(manuals_dir),
-            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+            initialdir=str(initial_dir),
+            filetypes=(("PDF files", "*.pdf"), ("All files", "*.*"))
         )
         
         if filename:
@@ -1210,23 +1226,30 @@ class ServerLauncher:
         self.log("🚀 Starting server...")
         
         try:
+            # Prepare log file
+            server_log = self.log_dir / "server_console.log"
+            self.server_log_file = open(server_log, "w", encoding="utf-8")
+            
             if sys.platform == 'win32':
-                # Windows: Create new console window, don't capture output
+                # Windows: Create new console window but ALSO redirect output to file
                 self.server_process = subprocess.Popen(
                     [sys.executable, str(self.server_script)],
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    # NO stdout/stderr capture - avoids encoding issues
+                    stdout=self.server_log_file,
+                    stderr=subprocess.STDOUT
                 )
             else:
                 # Linux/Mac
                 self.server_process = subprocess.Popen(
-                    [sys.executable, str(self.server_script)]
+                    [sys.executable, str(self.server_script)],
+                    stdout=self.server_log_file,
+                    stderr=subprocess.STDOUT
                 )
             
             self.server_running = True
             self.update_status()
-            self.log("✓ Server started in separate window!")
-            self.log("ℹ Check the new console window for server output")
+            self.log("✓ Server started!")
+            self.log(f"ℹ Log: {server_log}")
             
             # Detect protocol after server starts
             def detect_protocol():
@@ -1237,26 +1260,22 @@ class ServerLauncher:
                     self.root.after(0, lambda attempt=i: self.log(f"🔍 Connection attempt {attempt}/{len(delays)}..."))
                     
                     if self.detect_server_protocol():
-                        self.root.after(0, lambda: self.log(f"✓ Connected! Using: {self.server_protocol.upper()}"))
+                        self.root.after(0, lambda: self.log(f"✓ Connected! Using: {self.server_protocol.upper()}:{self.server_port}"))
                         self.root.after(0, self.refresh_manuals_list)
                         self.root.after(0, self.refresh_models_list)
                         return
                 
                 # Si falla después de todos los intentos
                 self.root.after(0, lambda: self.log("✗ Server didn't respond after 28 seconds"))
-                self.root.after(0, lambda: self.log("ℹ️ Check the console window for errors"))
+                self.root.after(0, lambda: self.log("ℹ️ Check logs/server_console.log for details"))
                 self.root.after(0, lambda: messagebox.showwarning(
                     "Server Not Responding",
-                    "The server process started but is not responding.\n\n"
+                    f"The server process started but is not responding.\n\n"
+                    f"Check log: {server_log}\n\n"
                     "Common issues:\n"
-                    "• Ollama is not running (run 'ollama serve')\n"
-                    "• Port 5000 is already in use\n"
-                    "• Missing Python dependencies\n"
-                    "• Check the console window for error messages\n\n"
-                    "Try:\n"
-                    "1. Close this launcher\n"
-                    "2. Run 'ollama serve' in a terminal\n"
-                    "3. Restart the launcher"
+                    "• Ollama is not running\n"
+                    "• Firewall/Antivirus blocking connection\n"
+                    "• Ports 5000-5010 busy\n"
                 ))
             
             threading.Thread(target=detect_protocol, daemon=True).start()

@@ -1143,3 +1143,78 @@ if __name__ == '__main__':
     else:
         log_message("Failed to initialize components", "ERROR")
         sys.exit(1)
+
+# ============================================================================
+# PORT MANAGEMENT
+# ============================================================================
+
+def find_available_port(start_port=5000, max_port=5010):
+    """Find first available port in range"""
+    import socket
+    for port in range(start_port, max_port + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('localhost', port)) != 0:
+                return port
+    return None
+
+def update_config_port(port):
+    """Update config file with actual running port"""
+    try:
+        config = {}
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        
+        config['port'] = port
+        config['last_updated'] = datetime.now().isoformat()
+        
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+            
+        log_message(f"Config updated with port: {port}")
+    except Exception as e:
+        log_message(f"Error updating config port: {e}", "WARN")
+
+# ============================================================================
+# MAIN ENTRY POINT
+# ============================================================================
+
+if __name__ == '__main__':
+    print_banner()
+    
+    # Initialize components
+    if not initialize_components():
+        log_message("Failed to initialize components. Exiting.", "ERROR")
+        sys.exit(1)
+    
+    # Find available port
+    port = find_available_port(SERVER_PORT, SERVER_PORT + 10)
+    if not port:
+        log_message(f"No ports available between {SERVER_PORT} and {SERVER_PORT + 10}", "ERROR")
+        sys.exit(1)
+        
+    log_message(f"Starting server on port {port}...")
+    update_config_port(port)
+    
+    # Generate SSL certs
+    if ensure_ssl_certificates():
+        context = ('server.crt', 'server.key')
+        protocol = "HTTPS"
+    else:
+        context = None
+        protocol = "HTTP"
+        
+    log_message(f"Server running at {protocol}://localhost:{port}")
+    log_message("Press Ctrl+C to stop")
+    
+    try:
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            ssl_context=context,
+            threaded=True,
+            use_reloader=False
+        )
+    except Exception as e:
+        log_message(f"Server crashed: {e}", "ERROR")
+        sys.exit(1)

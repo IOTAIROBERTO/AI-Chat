@@ -203,10 +203,15 @@ if /i "%INSTALL_MODEL_2%"=="Y" (
     echo.
 ) 
 
-echo [PHASE 8/9] Configuring firewall...
-netsh advfirewall firewall delete rule name="TRAINING AI SERVER" >nul 2>&1
-netsh advfirewall firewall add rule name="TRAINING AI SERVER" dir=in action=allow protocol=TCP localport=5000 profile=private >nul 2>&1
-echo [OK] Firewall configured
+echo [PHASE 8/9] Configuring firewall & security...
+if exist "%INSTALL_DIR%\installer\configure_security.bat" (
+    call "%INSTALL_DIR%\installer\configure_security.bat" "%INSTALL_DIR%"
+) else (
+    echo [WARN] Security configuration script not found!
+    echo [WARN] Falling back to basic firewall rule...
+    netsh advfirewall firewall add rule name="TRAINING AI SERVER" dir=in action=allow protocol=TCP localport=5000-5010 profile=any >nul 2>&1
+)
+echo [OK] Security configured
 echo.
 
 echo [PHASE 9/9] Creating configuration...
