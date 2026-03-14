@@ -1057,6 +1057,7 @@ def query_audio():
                 active_model = current_ollama_model
             
             if detected_language == 'en':
+               
                 prompt = f"""You are a bilingual technical assistant (Spanish/English) specialized EXCLUSIVELY in the provided manuals.
 
 STRICT RULES:
