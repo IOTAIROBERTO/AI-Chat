@@ -14,7 +14,7 @@ import threading
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS  
 import shutil 
 
@@ -56,8 +56,12 @@ available_models = []
 model_lock = threading.Lock()
 
 # Configuration
-WHISPER_MODEL_SIZE = "base"
-DEFAULT_OLLAMA_MODEL = "qwen2.5:1.5b"  # NEW DEFAULT (replaces llama3.2:3b)
+WHISPER_MODEL_SIZE = "small"          # small=244M multilingual, medium=769M for best Spanish accuracy
+WHISPER_LANGUAGE = None               # None = auto-detect (supports Spanish + English)
+WHISPER_DEVICE = "auto"               # auto = CUDA if available, else CPU
+WHISPER_COMPUTE_TYPE = "auto"         # auto = float16 on GPU, int8 on CPU
+DEFAULT_OLLAMA_MODEL = "qwen2.5:1.5b"
+USE_SSL = True                        # HTTPS required for Meta Quest WebXR
 SERVER_PORT = 5000
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
@@ -232,14 +236,69 @@ def check_port_available(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) != 0
 
-def ensure_ssl_certificates(cert_file='server.crt', key_file='server.key'):
-    """Generate self-signed SSL certificates if they don't exist"""
-    if os.path.exists(cert_file) and os.path.exists(key_file):
-        log_message("SSL certificates found.")
+def _get_all_local_ips():
+    """Get all local IP addresses across all network interfaces."""
+    import socket
+    ips = set()
+    ips.add("127.0.0.1")
+    # Method 1: hostname resolution
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ips.add(info[4][0])
+    except Exception:
+        pass
+    # Method 2: connect to external IP to find the default route interface
+    for target in ["8.8.8.8", "1.1.1.1"]:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect((target, 80))
+            ips.add(s.getsockname()[0])
+            s.close()
+        except Exception:
+            pass
+    return ips
+
+
+def _cert_covers_current_ips(cert_file):
+    """Check if existing cert's SANs include all current local IPs."""
+    try:
+        from cryptography import x509
+        import ipaddress
+        with open(cert_file, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        cert_ips = set()
+        for ip in san.value.get_values_for_type(x509.IPAddress):
+            cert_ips.add(str(ip))
+        for dns in san.value.get_values_for_type(x509.DNSName):
+            cert_ips.add(dns)
+        current_ips = _get_all_local_ips()
+        missing = current_ips - cert_ips
+        if missing:
+            log_message(f"Cert missing IPs: {missing} — will regenerate", "WARN")
+            return False
         return True
+    except Exception as e:
+        log_message(f"Cert validation error: {e} — will regenerate", "WARN")
+        return False
+
+
+def ensure_ssl_certificates(cert_file='server.crt', key_file='server.key'):
+    """Generate self-signed SSL certificates if they don't exist or are stale."""
+    # Regenerate if cert exists but doesn't cover current network IPs
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        if _cert_covers_current_ips(cert_file):
+            log_message("SSL certificates found and valid.")
+            return True
+        log_message("SSL cert stale (IP changed) — regenerating...")
+        try:
+            os.remove(cert_file)
+        except Exception:
+            pass
 
     log_message("Generating self-signed SSL certificates...")
-    
+
     try:
         from cryptography import x509
         from cryptography.x509.oid import NameOID
@@ -257,50 +316,42 @@ def ensure_ssl_certificates(cert_file='server.crt', key_file='server.key'):
         if os.path.exists(key_file):
             try:
                 with open(key_file, "rb") as f:
-                    key = serialization.load_pem_private_key(
-                        f.read(),
-                        password=None
-                    )
+                    key = serialization.load_pem_private_key(f.read(), password=None)
                 key_reused = True
                 log_message("Reusing existing private key.")
             except Exception as e:
                 log_message(f"Could not load existing key, generating new one: {e}", "WARN")
                 try:
                     os.remove(key_file)
-                except:
+                except Exception:
                     pass
 
-        # Generate key if not loaded
         if not key:
-            key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048,
-            )
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        # Get local IP
+        # Collect ALL local IPs (WiFi, Ethernet, loopback)
+        local_ips = _get_all_local_ips()
         hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        
-        # Build subject
+
         subject = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
+            x509.NameAttribute(NameOID.COMMON_NAME, hostname),
             x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"AI Training Server"),
             x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, u"Local Dev"),
         ])
 
-        # Build SANs (Subject Alternative Names)
+        # Build SANs with ALL discovered IPs
         alt_names = [
             x509.DNSName(u"localhost"),
-            x509.DNSName(u"127.0.0.1"),
             x509.DNSName(hostname),
         ]
-        try:
-            alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
-            alt_names.append(x509.IPAddress(ipaddress.ip_address("127.0.0.1")))
-        except ValueError:
-            pass
+        for ip_str in local_ips:
+            try:
+                alt_names.append(x509.IPAddress(ipaddress.ip_address(ip_str)))
+            except ValueError:
+                pass
 
-        # Generate certificate
+        log_message(f"Cert SANs: localhost, {hostname}, {', '.join(sorted(local_ips))}")
+
         cert = x509.CertificateBuilder().subject_name(
             subject
         ).issuer_name(
@@ -312,14 +363,12 @@ def ensure_ssl_certificates(cert_file='server.crt', key_file='server.key'):
         ).not_valid_before(
             datetime.datetime.now(datetime.timezone.utc)
         ).not_valid_after(
-            # Valid for 10 years
             datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
         ).add_extension(
             x509.SubjectAlternativeName(alt_names),
             critical=False,
         ).sign(key, hashes.SHA256())
 
-        # Save private key
         if not key_reused:
             with open(key_file, "wb") as f:
                 f.write(key.private_bytes(
@@ -328,7 +377,6 @@ def ensure_ssl_certificates(cert_file='server.crt', key_file='server.key'):
                     encryption_algorithm=serialization.NoEncryption(),
                 ))
 
-        # Save certificate
         with open(cert_file, "wb") as f:
             f.write(cert.public_bytes(serialization.Encoding.PEM))
 
@@ -385,11 +433,61 @@ def initialize_components():
     try:
         log_message(f"Loading Whisper model ({WHISPER_MODEL_SIZE})...")
         from faster_whisper import WhisperModel
-        whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
-        log_message("Whisper model loaded [OK]")
+        import ctranslate2
+
+        # Resolve device: check ctranslate2 THEN verify the CUDA runtime DLL is
+        # actually loadable — GPU drivers alone are not enough (needs CUDA toolkit).
+        if WHISPER_DEVICE == "auto":
+            device = "cpu"  # safe default
+            try:
+                cuda_types = ctranslate2.get_supported_compute_types("cuda")
+                if cuda_types:
+                    try:
+                        import ctypes
+                        ctypes.WinDLL("cublas64_12.dll")   # raises OSError if missing, AttributeError on non-Windows
+                        device = "cuda"
+                        log_message("CUDA 12 runtime detected — using GPU")
+                    except (OSError, AttributeError):
+                        log_message("CUDA drivers present but cublas64_12.dll not found — using CPU", "WARN")
+            except Exception:
+                pass
+        else:
+            device = WHISPER_DEVICE
+
+        if WHISPER_COMPUTE_TYPE == "auto":
+            compute_type = "float16" if device == "cuda" else "int8"
+        else:
+            compute_type = WHISPER_COMPUTE_TYPE
+
+        # Use a controlled local cache inside the server directory (avoids Windows
+        # permission issues with the user's HuggingFace hub cache)
+        model_cache = Path(__file__).parent / "whisper_cache"
+        model_cache.mkdir(parents=True, exist_ok=True)
+
+        def _load_whisper():
+            return WhisperModel(
+                WHISPER_MODEL_SIZE,
+                device=device,
+                compute_type=compute_type,
+                download_root=str(model_cache)
+            )
+
+        try:
+            whisper_model = _load_whisper()
+        except Exception as load_err:
+            # Model cache is likely corrupted — wipe it and re-download
+            log_message(f"Whisper cache error: {load_err} — clearing cache and retrying...", "WARN")
+            import shutil as _shutil
+            _shutil.rmtree(str(model_cache), ignore_errors=True)
+            model_cache.mkdir(parents=True, exist_ok=True)
+            whisper_model = _load_whisper()
+
+        log_message(f"Whisper model loaded [OK] — device={device}, compute={compute_type}")
     except Exception as e:
-        log_message(f"Whisper initialization failed: {str(e)}", "ERROR")
-        return False
+        log_message(f"Whisper initialization failed: {str(e)}", "WARN")
+        log_message("Audio queries will be unavailable until Whisper loads correctly.", "WARN")
+        whisper_model = None
+        # Non-fatal: server continues without STT
 
     try:
         log_message("Verifying Ollama...")
@@ -683,12 +781,26 @@ def switch_model():
     
 @app.route('/manuals', methods=['GET'])
 def list_manuals():
+    # Serialize pages sets → sorted lists (sets are not JSON-serializable)
+    serializable = {
+        name: {**info, 'pages': sorted(list(info['pages'])) if isinstance(info.get('pages'), set) else info.get('pages', [])}
+        for name, info in indexed_manuals.items()
+    }
     return jsonify({
         'success': True,
-        'manuals': indexed_manuals,
+        'manuals': serializable,
         'total_manuals': len(indexed_manuals),
         'total_chunks': collection.count() if collection else 0
     })
+
+
+@app.route('/admin')
+def admin_panel():
+    """Serve the debug tester panel — access via https://IP:5000/admin"""
+    tester = Path(__file__).parent / 'AI_Server_Tester.html'
+    if tester.exists():
+        return send_file(str(tester))
+    return jsonify({'error': 'Admin panel not found. Copy AI_Server_Tester.html next to offline_server.py'}), 404
 
 @app.route('/check_manual', methods=['POST'])
 def check_manual():
@@ -1002,62 +1114,93 @@ RESPUESTA (Basada en el contexto anterior):"""
 
 @app.route('/query_audio', methods=['POST'])
 def query_audio():
+    if whisper_model is None:
+        return jsonify({'error': 'Speech recognition is not available. Check server logs for Whisper initialization errors.'}), 503
+
     try:
         if 'audio' not in request.files:
             return jsonify({'error': 'No audio file'}), 400
-        
+
         audio_file = request.files['audio']
         manual_filter = request.form.get('manual_name')
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
+
+        # Preserve original extension so ffmpeg/ct2 can decode it correctly
+        original_filename = audio_file.filename or 'audio.wav'
+        ext = os.path.splitext(original_filename)[1].lower() or '.wav'
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             audio_file.save(tmp.name)
             tmp_path = tmp.name
-        
+
         try:
-            segments, info = whisper_model.transcribe(tmp_path, beam_size=5)
+            import ollama
+
+            # ── STEP 1: Speech-to-Text ──
+            t_stt = time.time()
+            log_message(f"[AUDIO] STT starting — file={os.path.basename(tmp_path)}, size={os.path.getsize(tmp_path)/1024:.1f}KB")
+
+            # beam_size=1 (greedy) is ~5x faster than beam_size=5 — fine for voice queries
+            segments, info = whisper_model.transcribe(
+                tmp_path,
+                language=WHISPER_LANGUAGE,
+                beam_size=1,
+                vad_filter=True,
+                vad_parameters={"min_silence_duration_ms": 500},
+                condition_on_previous_text=False,
+            )
+            # segments is a lazy generator — consume it to actually run transcription
             query = ' '.join([s.text for s in segments]).strip()
-            
+            stt_ms = int((time.time() - t_stt) * 1000)
+
+            detected_language = getattr(info, 'language', 'es')
+            log_message(f"[AUDIO] STT done in {stt_ms}ms — lang={detected_language} conf={getattr(info, 'language_probability', 0):.2f} text=\"{query[:80]}\"")
+
             if not query:
                 return jsonify({'error': 'No speech detected'}), 400
-            
-            detected_language = info.language if hasattr(info, 'language') else 'es'
-            
+
+            # ── STEP 2: RAG retrieval ──
+            t_rag = time.time()
             where_clause = {"manual_name": manual_filter} if manual_filter else None
-            
+
             results = collection.query(
                 query_texts=[query],
                 n_results=3,
                 where=where_clause
             )
-            
+            rag_ms = int((time.time() - t_rag) * 1000)
+            n_docs = len(results['documents'][0]) if results['documents'][0] else 0
+            log_message(f"[AUDIO] RAG done in {rag_ms}ms — {n_docs} chunks retrieved")
+
             if not results['documents'][0]:
                 return jsonify({
                     'success': True,
                     'transcription': query,
                     'answer': 'No relevant information found.',
-                    'sources': []
+                    'sources': [],
+                    'detected_language': detected_language,
+                    'timing': {'stt_ms': stt_ms, 'rag_ms': rag_ms}
                 })
-            
+
             context_parts = []
             sources = []
             page_references = []
-            
+
             for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
                 context_parts.append(doc)
                 manual = metadata['manual_name']
                 page = metadata['page']
                 sources.append({'manual': manual, 'page': page})
                 page_references.append(f"(Manual: {manual}, Página: {page})")
-            
+
             context = '\n\n'.join(context_parts)
-            
-            import ollama
-            
+
+            # ── STEP 3: LLM generation ──
+            t_llm = time.time()
             with model_lock:
                 active_model = current_ollama_model
-            
+            log_message(f"[AUDIO] LLM starting — model={active_model}")
+
             if detected_language == 'en':
-               
                 prompt = f"""You are a bilingual technical assistant (Spanish/English) specialized EXCLUSIVELY in the provided manuals.
 
 STRICT RULES:
@@ -1090,9 +1233,12 @@ Referencias de páginas: {', '.join(page_references)}
 Pregunta del usuario: {query}
 
 Respuesta (solo del contexto, incluye páginas):"""
-            
+
             response = ollama.generate(model=active_model, prompt=prompt)
-            
+            llm_ms = int((time.time() - t_llm) * 1000)
+            total_ms = stt_ms + rag_ms + llm_ms
+            log_message(f"[AUDIO] LLM done in {llm_ms}ms — total pipeline: {total_ms}ms (STT={stt_ms} RAG={rag_ms} LLM={llm_ms})")
+
             return jsonify({
                 'success': True,
                 'transcription': query,
@@ -1100,7 +1246,8 @@ Respuesta (solo del contexto, incluye páginas):"""
                 'sources': sources,
                 'manuals_used': list(set(s['manual'] for s in sources)),
                 'model_used': active_model,
-                'detected_language': detected_language
+                'detected_language': detected_language,
+                'timing': {'stt_ms': stt_ms, 'rag_ms': rag_ms, 'llm_ms': llm_ms, 'total_ms': total_ms}
             })
             
         finally:
@@ -1124,22 +1271,23 @@ if __name__ == '__main__':
     log_message("- Voice query with language detection")
     
     if initialize_components():
-        # SSL Setup
-        base_dir = Path(__file__).parent.absolute()
-        cert_file = str(base_dir / 'server.crt')
-        key_file = str(base_dir / 'server.key')
+        # SSL Setup — disabled by default for local LAN use (avoids cert issues on Quest/browser)
         ssl_context = None
         protocol = "http"
-        
-        if ensure_ssl_certificates(cert_file, key_file):
-            ssl_context = (cert_file, key_file)
-            protocol = "https"
-        else:
-            log_message("WARNING: SSL generation failed, falling back to HTTP", "WARN")
+
+        if USE_SSL:
+            base_dir = Path(__file__).parent.absolute()
+            cert_file = str(base_dir / 'server.crt')
+            key_file = str(base_dir / 'server.key')
+            if ensure_ssl_certificates(cert_file, key_file):
+                ssl_context = (cert_file, key_file)
+                protocol = "https"
+            else:
+                log_message("WARNING: SSL generation failed, falling back to HTTP", "WARN")
 
         log_message(f"Server starting on {protocol}://0.0.0.0:{SERVER_PORT}...")
         log_message(f"Active model: {current_ollama_model}")
-        
+
         app.run(host='0.0.0.0', port=SERVER_PORT, threaded=True, ssl_context=ssl_context)
     else:
         log_message("Failed to initialize components", "ERROR")

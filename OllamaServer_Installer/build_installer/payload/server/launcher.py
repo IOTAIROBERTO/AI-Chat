@@ -1230,26 +1230,28 @@ class ServerLauncher:
             server_log = self.log_dir / "server_console.log"
             self.server_log_file = open(server_log, "w", encoding="utf-8")
             
+            # No CREATE_NEW_CONSOLE — single window only.
+            # stdout/stderr go to the log file; we tail it live into the GUI log panel.
+            startupinfo = None
             if sys.platform == 'win32':
-                # Windows: Create new console window but ALSO redirect output to file
-                self.server_process = subprocess.Popen(
-                    [sys.executable, str(self.server_script)],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    stdout=self.server_log_file,
-                    stderr=subprocess.STDOUT
-                )
-            else:
-                # Linux/Mac
-                self.server_process = subprocess.Popen(
-                    [sys.executable, str(self.server_script)],
-                    stdout=self.server_log_file,
-                    stderr=subprocess.STDOUT
-                )
-            
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+
+            self.server_process = subprocess.Popen(
+                [sys.executable, str(self.server_script)],
+                stdout=self.server_log_file,
+                stderr=subprocess.STDOUT,
+                startupinfo=startupinfo
+            )
+
             self.server_running = True
             self.update_status()
             self.log("✓ Server started!")
             self.log(f"ℹ Log: {server_log}")
+
+            # Tail server_console.log into the GUI log panel in real time
+            threading.Thread(target=self._tail_server_log, args=(server_log,), daemon=True).start()
             
             # Detect protocol after server starts
             def detect_protocol():
@@ -1284,6 +1286,25 @@ class ServerLauncher:
             self.log(f"✗ Failed: {str(e)}")
             messagebox.showerror("Error", str(e))
     
+    def _tail_server_log(self, log_path):
+        """Stream server_console.log into the GUI log panel in real time."""
+        import time as _time
+        last_pos = 0
+        while self.server_running or (self.server_process and self.server_process.poll() is None):
+            try:
+                with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+                    f.seek(last_pos)
+                    chunk = f.read()
+                    if chunk:
+                        last_pos = f.tell()
+                        for line in chunk.splitlines():
+                            line = line.strip()
+                            if line:
+                                self.root.after(0, lambda l=line: self.log(f"  {l}"))
+            except Exception:
+                pass
+            _time.sleep(0.4)
+
     def stop_server(self):
         """Stop server"""
         if self.server_process:
