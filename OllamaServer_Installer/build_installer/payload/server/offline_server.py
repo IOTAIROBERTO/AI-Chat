@@ -483,6 +483,17 @@ def initialize_components():
             whisper_model = _load_whisper()
 
         log_message(f"Whisper model loaded [OK] — model={WHISPER_MODEL_SIZE}, device={device}, compute={compute_type}")
+
+        # STT warm-up: run a silent audio clip through transcribe() so the first
+        # real user query does not pay the CTranslate2 cold-start penalty.
+        try:
+            import numpy as np
+            _warmup_audio = np.zeros(int(0.5 * 16000), dtype=np.float32)  # 0.5 s silence @ 16 kHz
+            whisper_model.transcribe(_warmup_audio, language="en")
+            log_message("Whisper warm-up [OK]")
+        except Exception as _wu_err:
+            log_message(f"Whisper warm-up skipped: {_wu_err}", "WARN")
+
     except Exception as e:
         log_message(f"Whisper initialization failed: {str(e)}", "WARN")
         log_message("Audio queries will be unavailable until Whisper loads correctly.", "WARN")
