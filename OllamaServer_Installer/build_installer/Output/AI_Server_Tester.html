@@ -420,7 +420,7 @@ async function runHealthCheck() {
         const data = await res.json();
 
         log('ok',   `Connected in ${ms}ms — HTTP ${res.status}`);
-        log('data', `Model: ${data.ollama_model||'?'} | Whisper: ${data.whisper_loaded} | Bilingual: ${data.bilingual_mode}`);
+        log('data', `Model: ${data.ollama_model||'?'} | Whisper: ${data.whisper_model||'not loaded'} | Bilingual: ${data.bilingual_mode}`);
         log('data', `Chunks: ${data.total_chunks??'?'} / ${data.max_chunks??'?'} (${data.chunk_usage_percent??'?'}%)`);
 
         updateHealthUI(data, ms);
@@ -448,7 +448,7 @@ function openCert() {
 function updateHealthUI(data, latency) {
     const set = (id, val, cls) => { const el=$(id); el.textContent=val; el.className='health-value'+(cls?' '+cls:''); };
     set('hStatus',    'Online',                                      'ok');
-    set('hWhisper',   data.whisper_loaded ? 'Cargado ✓':'No cargado', data.whisper_loaded?'ok':'err');
+    set('hWhisper',   data.whisper_model ? `${data.whisper_model} ✓` : 'No cargado', data.whisper_model?'ok':'err');
     set('hModel',     data.ollama_model||'—',                        data.ollama_model?'':'warn');
     set('hChunks',    data.total_chunks??'—');
     set('hLatency',   latency+'ms',                                  latency<200?'ok':latency<600?'warn':'err');
@@ -525,21 +525,60 @@ async function sendText() {
     log('info', `TEXT query: "${query}"`);
     const t0 = performance.now();
 
+    // Render shell immediately so tokens appear as they arrive
+    $('resultBox').innerHTML = `
+        <div class="result-label">Pregunta</div>
+        <div class="result-question">${escHtml(query)}</div>
+        <div class="result-label">Respuesta</div>
+        <div class="result-answer" id="streamAnswer" style="white-space:pre-wrap;min-height:2em;">▍</div>
+        <div class="result-meta" id="streamMeta"></div>`;
+
     try {
-        const res = await fetch(`${getBase()}/query`, {
+        const res = await fetch(`${getBase()}/query_stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query })
         });
-        const ms   = Math.round(performance.now() - t0);
-        log('data', `HTTP ${res.status} in ${ms}ms`);
 
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
 
-        const data = await res.json();
-        stopTimer();
-        log('ok', `Answer received — model: ${data.model_used||'?'} | sources: ${data.sources?.length||0}`);
-        displayResult(query, data, ms, null);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullAnswer = '';
+        const answerEl = $('streamAnswer');
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep any incomplete trailing line
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                let payload;
+                try { payload = JSON.parse(line.slice(6)); } catch { continue; }
+
+                if (payload.token) {
+                    fullAnswer += payload.token;
+                    answerEl.textContent = fullAnswer + '▍';
+                } else if (payload.done) {
+                    answerEl.textContent = fullAnswer;
+                    stopTimer();
+                    const ms = Math.round(performance.now() - t0);
+                    log('ok', `Answer received — model: ${payload.model_used||'?'} | sources: ${payload.sources?.length||0}`);
+                    const sources = (payload.sources||[]).map(s=>`${s.manual} p.${s.page}`).join(' · ') || '—';
+                    $('streamMeta').innerHTML = `
+                        <div class="meta-badge latency">Tiempo total: <span>${ms}ms</span></div>
+                        <div class="meta-badge">Modelo: <span>${escHtml(payload.model_used||'—')}</span></div>
+                        <div class="meta-badge source">Fuentes: <span>${escHtml(sources)}</span></div>`;
+                } else if (payload.error) {
+                    throw new Error(payload.error);
+                }
+            }
+        }
     } catch (err) {
         stopTimerError();
         log('error', `Query failed: ${err.message}`);

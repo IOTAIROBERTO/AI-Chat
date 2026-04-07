@@ -14,7 +14,7 @@ import threading
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS  
 import shutil 
 
@@ -56,11 +56,11 @@ available_models = []
 model_lock = threading.Lock()
 
 # Configuration
-WHISPER_MODEL_SIZE = "small"          # small=244M multilingual, medium=769M for best Spanish accuracy
+WHISPER_MODEL_SIZE = "medium"         # medium=769M — better technical Spanish (fadec, nacelle, borescope, etc.)
 WHISPER_LANGUAGE = None               # None = auto-detect (supports Spanish + English)
 WHISPER_DEVICE = "auto"               # auto = CUDA if available, else CPU
 WHISPER_COMPUTE_TYPE = "auto"         # auto = float16 on GPU, int8 on CPU
-DEFAULT_OLLAMA_MODEL = "qwen2.5:1.5b"
+DEFAULT_OLLAMA_MODEL = "qwen2.5:7b"
 USE_SSL = True                        # HTTPS required for Meta Quest WebXR
 SERVER_PORT = 5000
 CHUNK_SIZE = 1000
@@ -482,7 +482,7 @@ def initialize_components():
             model_cache.mkdir(parents=True, exist_ok=True)
             whisper_model = _load_whisper()
 
-        log_message(f"Whisper model loaded [OK] — device={device}, compute={compute_type}")
+        log_message(f"Whisper model loaded [OK] — model={WHISPER_MODEL_SIZE}, device={device}, compute={compute_type}")
     except Exception as e:
         log_message(f"Whisper initialization failed: {str(e)}", "WARN")
         log_message("Audio queries will be unavailable until Whisper loads correctly.", "WARN")
@@ -724,6 +724,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'whisper_loaded': whisper_model is not None,
+        'whisper_model': WHISPER_MODEL_SIZE if whisper_model is not None else None,
         'ollama_model': current_ollama_model,
         'available_models': get_available_models(),
         'bilingual_mode': True,
@@ -896,9 +897,9 @@ def index_manual():
     file.save(file_path) # Copia física a la carpeta de manuales
 
     # Indexar en la DB vectorial
-    success = vector_db.add_manual(file_path)
-    
-    if success:
+    result = index_single_manual(file_path)
+
+    if result['success']:
         # Devolver la lista actualizada de archivos PDF para que el cliente la vea
         indexed_files = [f for f in os.listdir(manuals_folder) if f.lower().endswith('.pdf')]
         return jsonify({
@@ -906,7 +907,7 @@ def index_manual():
             "files": indexed_files
         })
     else:
-        return jsonify({"error": "Error al procesar el PDF"}), 500
+        return jsonify({"error": result.get('error', 'Error al procesar el PDF')}), 500
 
 @app.route('/delete_manual/<filename>', methods=['DELETE'])
 def delete_manual_file(filename):
@@ -918,7 +919,11 @@ def delete_manual_file(filename):
             os.remove(file_path)
         
         # 2. Eliminar de la base de datos vectorial (ChromaDB)
-        vector_db.delete_source(filename)
+        manual_name = Path(filename).stem
+        results = collection.get(where={"manual_name": manual_name})
+        if results and results['ids']:
+            collection.delete(ids=results['ids'])
+        indexed_manuals.pop(manual_name, None)
         
         # 3. Devolver lista actualizada
         files = [f for f in os.listdir(manuals_folder) if f.lower().endswith('.pdf')]
@@ -1105,6 +1110,94 @@ RESPUESTA (Basada en el contexto anterior):"""
         
     except Exception as e:
         log_message(f"Error in query: {e}", "ERROR")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/query_stream', methods=['POST'])
+def query_stream():
+    """Streaming version of /query — sends tokens via SSE as the LLM generates them."""
+    try:
+        data = request.get_json()
+        query = data.get('query', '')
+        manual_filter = data.get('manual_name')
+        n_results = data.get('n_results', 7)
+
+        if not query:
+            return jsonify({'error': 'No query provided'}), 400
+
+        where_clause = {"manual_name": manual_filter} if manual_filter else None
+
+        results = collection.query(
+            query_texts=[query],
+            n_results=n_results,
+            where=where_clause
+        )
+
+        if not results['documents'] or not results['documents'][0]:
+            def empty_stream():
+                yield f"data: {json.dumps({'done': True, 'answer': 'No encontré información relevante en los manuales.', 'sources': [], 'model_used': current_ollama_model})}\n\n"
+            return Response(stream_with_context(empty_stream()), mimetype='text/event-stream',
+                            headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+        context_parts = []
+        sources = []
+        page_references = []
+        for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
+            context_parts.append(doc)
+            manual = metadata['manual_name']
+            page = metadata['page']
+            sources.append({'manual': manual, 'page': page})
+            page_references.append(f"(Manual: {manual}, Página: {page})")
+
+        context = '\n\n'.join(context_parts)
+
+        import ollama
+        with model_lock:
+            active_model = current_ollama_model
+
+        prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
+
+INSTRUCCIONES:
+1. Si la entrada del usuario es un término general (ej. "{query}"), resume de qué trata ese componente o tema según el contexto.
+2. Si el usuario hace una pregunta específica, responde con detalle paso a paso.
+3. Si el contexto contiene información pero no responde directamente a una pregunta implícita, ofrece un resumen de lo hallado.
+4. Responde siempre en el idioma del usuario.
+
+CONTEXTO DE LOS MANUALES:
+{context}
+
+REFERENCIAS DISPONIBLES:
+{', '.join(page_references)}
+
+PREGUNTA DEL USUARIO:
+{query}
+
+RESPUESTA (Basada en el contexto anterior):"""
+
+        log_message(f"[STREAM] Query using model: {active_model}")
+
+        def generate():
+            try:
+                stream = ollama.generate(
+                    model=active_model,
+                    prompt=prompt,
+                    stream=True,
+                    options={"temperature": 0.3, "num_ctx": 4096, "top_p": 0.9}
+                )
+                for chunk in stream:
+                    token = chunk.get('response', '')
+                    if token:
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'sources': sources, 'manuals_used': list(set(s['manual'] for s in sources)), 'model_used': active_model})}\n\n"
+            except Exception as e:
+                log_message(f"[STREAM] Error during generation: {e}", "ERROR")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    except Exception as e:
+        log_message(f"Error in query_stream: {e}", "ERROR")
         return jsonify({'error': str(e)}), 500
 
 

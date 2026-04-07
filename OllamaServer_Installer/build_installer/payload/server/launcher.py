@@ -161,13 +161,13 @@ class ServerLauncher:
             if self.config_file.exists():
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.current_model = config.get('current_model', 'qwen2.5:1.5b')
+                    self.current_model = config.get('current_model', 'qwen2.5:7b')
                     self.server_port = config.get('port', 5000)
             else:
-                self.current_model = 'qwen2.5:1.5b'
+                self.current_model = 'qwen2.5:7b'
                 self.server_port = 5000
         except:
-            self.current_model = 'qwen2.5:1.5b'
+            self.current_model = 'qwen2.5:7b'
             self.server_port = 5000
     
     def save_config(self):
@@ -883,13 +883,13 @@ class ServerLauncher:
         
         info_text += "\n\n" + "=" * 70 + "\n"
         info_text += "💡 RECOMMENDATIONS:\n\n"
-        info_text += "🥇 BEST DEFAULT: qwen2.5:1.5b\n"
-        info_text += "   • Fastest bilingual model\n"
+        info_text += "🥇 BEST DEFAULT: qwen2.5:7b\n"
+        info_text += "   • Best quality for technical aviation Q&A\n"
         info_text += "   • Native Spanish & English\n"
-        info_text += "   • Replaces llama3.2:3b (2x faster)\n\n"
-        
-        info_text += "🥈 BEST QUALITY: qwen2.5:3b\n"
-        info_text += "   • Maximum accuracy\n"
+        info_text += "   • Recommended for RAG with domain manuals\n\n"
+
+        info_text += "🥈 BALANCED: qwen2.5:3b\n"
+        info_text += "   • Good quality, lighter footprint\n"
         info_text += "   • Technical manuals\n\n"
         
         info_text += "🥉 FASTEST: llama3.2:1b\n"
