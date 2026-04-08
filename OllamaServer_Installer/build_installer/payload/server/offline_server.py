@@ -144,6 +144,33 @@ def verify_model_available(model_name):
     models = get_available_models()
     return model_name in models
 
+_OLLAMA_TIMEOUT = 120  # seconds before a generate call is considered hung
+
+def ollama_generate_with_retry(model, prompt, options=None, max_retries=2):
+    """
+    Call ollama.generate() with a timeout and exponential-backoff retry.
+    Retries up to max_retries times (total attempts = max_retries + 1).
+    Raises the last exception if all attempts fail.
+    """
+    import ollama as _ollama
+    client = _ollama.Client(timeout=_OLLAMA_TIMEOUT)
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return client.generate(model=model, prompt=prompt, options=options or {})
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                wait = 2 ** attempt  # 1 s, then 2 s
+                log_message(
+                    f"[Ollama] Attempt {attempt + 1} failed ({exc}). Retrying in {wait}s…",
+                    "WARNING"
+                )
+                time.sleep(wait)
+            else:
+                log_message(f"[Ollama] All {max_retries + 1} attempts failed: {exc}", "ERROR")
+    raise last_exc
+
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
@@ -1073,8 +1100,7 @@ def query_text():
             page_references.append(f"(Manual: {manual}, Página: {page})")
         
         context = '\n\n'.join(context_parts)
-        
-        import ollama
+
         with model_lock:
             active_model = current_ollama_model
         
@@ -1101,12 +1127,12 @@ RESPUESTA (Basada en el contexto anterior):"""
         log_message(f"Query using model: {active_model}")
         
         # Añadimos opciones para evitar respuestas cortas/negativas
-        response = ollama.generate(
-            model=active_model, 
+        response = ollama_generate_with_retry(
+            model=active_model,
             prompt=prompt,
             options={
-                "temperature": 0.3, # Equilibrio entre precisión y fluidez
-                "num_ctx": 4096,    # Ventana de contexto amplia
+                "temperature": 0.3,  # Equilibrio entre precisión y fluidez
+                "num_ctx": 4096,     # Ventana de contexto amplia
                 "top_p": 0.9
             }
         )
@@ -1162,7 +1188,6 @@ def query_stream():
 
         context = '\n\n'.join(context_parts)
 
-        import ollama
         with model_lock:
             active_model = current_ollama_model
 
@@ -1189,7 +1214,9 @@ RESPUESTA (Basada en el contexto anterior):"""
 
         def generate():
             try:
-                stream = ollama.generate(
+                import ollama as _ollama
+                _client = _ollama.Client(timeout=_OLLAMA_TIMEOUT)
+                stream = _client.generate(
                     model=active_model,
                     prompt=prompt,
                     stream=True,
@@ -1237,8 +1264,6 @@ def query_audio():
             tmp_path = tmp.name
 
         try:
-            import ollama
-
             # ── STEP 1: Speech-to-Text ──
             t_stt = time.time()
             log_message(f"[AUDIO] STT starting — file={os.path.basename(tmp_path)}, size={os.path.getsize(tmp_path)/1024:.1f}KB")
@@ -1268,7 +1293,7 @@ def query_audio():
 
             results = collection.query(
                 query_texts=[query],
-                n_results=3,
+                n_results=5,
                 where=where_clause
             )
             rag_ms = int((time.time() - t_rag) * 1000)
@@ -1338,7 +1363,7 @@ Pregunta del usuario: {query}
 
 Respuesta (solo del contexto, incluye páginas):"""
 
-            response = ollama.generate(model=active_model, prompt=prompt)
+            response = ollama_generate_with_retry(model=active_model, prompt=prompt)
             llm_ms = int((time.time() - t_llm) * 1000)
             total_ms = stt_ms + rag_ms + llm_ms
             log_message(f"[AUDIO] LLM done in {llm_ms}ms — total pipeline: {total_ms}ms (STT={stt_ms} RAG={rag_ms} LLM={llm_ms})")
