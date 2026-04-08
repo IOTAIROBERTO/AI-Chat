@@ -155,21 +155,41 @@ echo [OK] Ollama ready
 echo.
 
 echo [PHASE 5/9] Starting Ollama service...
-start /b "" "%OLLAMA_CMD%" serve
-timeout /t 3 /nobreak >nul
-echo [OK] Ollama service started
+set "OLLAMA_STARTED_HERE=0"
+"%OLLAMA_CMD%" list >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo [OK] Ollama service already running
+) else (
+    set "OLLAMA_STARTED_HERE=1"
+    start /b "" "%OLLAMA_CMD%" serve
+    echo [INFO] Waiting for Ollama to be ready...
+    set "OLLAMA_READY=0"
+    for /L %%i in (1,1,20) do (
+        if "!OLLAMA_READY!"=="0" (
+            timeout /t 2 /nobreak >nul
+            "%OLLAMA_CMD%" list >nul 2>&1
+            if !ERRORLEVEL! equ 0 set "OLLAMA_READY=1"
+        )
+    )
+    if "!OLLAMA_READY!"=="0" (
+        echo [ERROR] Ollama service did not respond after 40 seconds
+        pause
+        exit /b 40
+    )
+    echo [OK] Ollama service ready
+)
 echo.
 
-echo [PHASE 6/9] Downloading default AI model (qwen2.5:1.5b)...
-echo [INFO] This is a ~1GB download, please wait...
+echo [PHASE 6/9] Downloading default AI model (qwen2.5:7b)...
+echo [INFO] This is a ~4.7GB download, please wait...
 echo [INFO] Progress will be shown below:
 echo.
 
-"%OLLAMA_CMD%" list | findstr "qwen2.5:1.5b" >nul 2>&1
+"%OLLAMA_CMD%" list | findstr "qwen2.5:7b" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo [OK] Default model already downloaded
 ) else (
-    "%OLLAMA_CMD%" pull qwen2.5:1.5b
+    "%OLLAMA_CMD%" pull qwen2.5:7b
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Model download failed
         pause
@@ -182,7 +202,7 @@ echo.
 echo [PHASE 7/9] Optional model installation...
 echo.
 echo You can install additional models now:
-echo   1. qwen2.5:3b (1.9GB) - Best quality
+echo   1. qwen2.5:3b (1.9GB) - Balanced (lighter than default 7b)
 echo   2. llama3.2:1b (1.3GB) - Ultra-fast
 echo   3. llama3.2:3b (2.0GB) - Legacy
 echo.
@@ -218,7 +238,7 @@ echo [PHASE 9/9] Creating configuration...
 set "CONFIG_FILE=%INSTALL_DIR%\server\server_config.json"
 (
     echo {
-    echo   "current_model": "qwen2.5:1.5b",
+    echo   "current_model": "qwen2.5:7b",
     echo   "bilingual_mode": true,
     echo   "supported_languages": ["es", "en"]
     echo }
@@ -239,6 +259,10 @@ echo If it doesn't start, you can run it manually from the Start Menu
 echo Si no inicia, puede ejecutarlo manualmente desde el Menu Inicio
 echo.
 
-timeout /t 3 /nobreak >nul
+:: Stop the Ollama instance we started during install so the window closes cleanly.
+:: The server launcher will start its own Ollama when the user runs the app.
+if "!OLLAMA_STARTED_HERE!"=="1" (
+    taskkill /F /IM ollama.exe >nul 2>&1
+)
 
 exit /b 0

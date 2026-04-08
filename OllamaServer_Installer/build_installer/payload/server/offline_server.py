@@ -896,9 +896,9 @@ def index_manual():
     file.save(file_path) # Copia física a la carpeta de manuales
 
     # Indexar en la DB vectorial
-    success = vector_db.add_manual(file_path)
-    
-    if success:
+    result = index_single_manual(file_path)
+
+    if result['success']:
         # Devolver la lista actualizada de archivos PDF para que el cliente la vea
         indexed_files = [f for f in os.listdir(manuals_folder) if f.lower().endswith('.pdf')]
         return jsonify({
@@ -906,7 +906,7 @@ def index_manual():
             "files": indexed_files
         })
     else:
-        return jsonify({"error": "Error al procesar el PDF"}), 500
+        return jsonify({"error": result.get('error', 'Error al procesar el PDF')}), 500
 
 @app.route('/delete_manual/<filename>', methods=['DELETE'])
 def delete_manual_file(filename):
@@ -918,7 +918,11 @@ def delete_manual_file(filename):
             os.remove(file_path)
         
         # 2. Eliminar de la base de datos vectorial (ChromaDB)
-        vector_db.delete_source(filename)
+        manual_name = Path(filename).stem
+        chroma_results = collection.get(where={"manual_name": manual_name})
+        if chroma_results and chroma_results['ids']:
+            collection.delete(ids=chroma_results['ids'])
+        indexed_manuals.pop(manual_name, None)
         
         # 3. Devolver lista actualizada
         files = [f for f in os.listdir(manuals_folder) if f.lower().endswith('.pdf')]
