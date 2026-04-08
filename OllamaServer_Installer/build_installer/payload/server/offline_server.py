@@ -1066,35 +1066,23 @@ def query_text():
         with model_lock:
             active_model = current_ollama_model
         
-        # PROMPT OPTIMIZADO: Más permisivo y enfocado en síntesis
-        prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
+        prompt = f"""Answer ONLY using the manual context below. Maximum 2-3 sentences. Never start with intro phrases like "Based on...", "According to...", "What I found...", "Here is...", "This is..." or similar. Just state the fact directly. End with: Source: [Manual], page [number]. Respond in the user's language.
 
-INSTRUCCIONES:
-1. Si la entrada del usuario es un término general (ej. "{query}"), resume de qué trata ese componente o tema según el contexto.
-2. Si el usuario hace una pregunta específica, responde con detalle paso a paso.
-3. Si el contexto contiene información pero no responde directamente a una pregunta implícita, ofrece un resumen de lo hallado.
-4. Responde siempre en el idioma del usuario.
-
-CONTEXTO DE LOS MANUALES:
+Context:
 {context}
 
-REFERENCIAS DISPONIBLES:
-{', '.join(page_references)}
+Question: {query}
 
-PREGUNTA DEL USUARIO:
-{query}
+Answer:"""
 
-RESPUESTA (Basada en el contexto anterior):"""
-        
         log_message(f"Query using model: {active_model}")
-        
-        # Añadimos opciones para evitar respuestas cortas/negativas
+
         response = ollama.generate(
-            model=active_model, 
+            model=active_model,
             prompt=prompt,
             options={
-                "temperature": 0.3, # Equilibrio entre precisión y fluidez
-                "num_ctx": 4096,    # Ventana de contexto amplia
+                "temperature": 0.2,
+                "num_ctx": 4096,
                 "top_p": 0.9
             }
         )
@@ -1204,41 +1192,24 @@ def query_audio():
                 active_model = current_ollama_model
             log_message(f"[AUDIO] LLM starting — model={active_model}")
 
-            if detected_language == 'en':
-                prompt = f"""You are a bilingual technical assistant (Spanish/English) specialized EXCLUSIVELY in the provided manuals.
+            prompt = f"""Answer ONLY using the manual context below. Maximum 2-3 sentences. Never start with intro phrases like "Based on...", "According to...", "What I found...", "Here is...", "This is..." or similar. Just state the fact directly. End with: Source: [Manual], page [number]. Respond in the user's language.
 
-STRICT RULES:
-1. ONLY answer based on the manual context
-2. If NOT in manual, respond: "I'm sorry, I don't have information about that in the indexed manuals."
-3. DO NOT use external general knowledge
-4. IMPORTANT: Always mention pages at the end: "Source: [Manual], page [number]"
+Context:
+{context}
 
-Manual context: {context}
+Question: {query}
 
-Page references: {', '.join(page_references)}
+Answer:"""
 
-User question: {query}
-
-Answer (only from context, include pages):"""
-            else:
-                prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
-
-INSTRUCCIONES:
-1. Si la entrada del usuario es un término general (ej. "{query}"), resume de qué trata ese componente o tema según el contexto.
-2. Si el usuario hace una pregunta específica, responde con detalle paso a paso.
-3. Si el contexto contiene información pero no responde directamente a una pregunta implícita, ofrece un resumen de lo hallado.
-4. Responde siempre en el idioma del usuario.
-5. IMPORTANTE: Siempre menciona las páginas al final: "Fuente: [Manual], página [número]"
-
-Contexto del manual: {context}
-
-Referencias de páginas: {', '.join(page_references)}
-
-Pregunta del usuario: {query}
-
-Respuesta (solo del contexto, incluye páginas):"""
-
-            response = ollama.generate(model=active_model, prompt=prompt)
+            response = ollama.generate(
+                model=active_model,
+                prompt=prompt,
+                options={
+                    "temperature": 0.2,
+                    "num_ctx": 4096,
+                    "top_p": 0.9
+                }
+            )
             llm_ms = int((time.time() - t_llm) * 1000)
             total_ms = stt_ms + rag_ms + llm_ms
             log_message(f"[AUDIO] LLM done in {llm_ms}ms — total pipeline: {total_ms}ms (STT={stt_ms} RAG={rag_ms} LLM={llm_ms})")
