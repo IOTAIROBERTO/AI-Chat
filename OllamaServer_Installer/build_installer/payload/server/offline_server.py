@@ -146,6 +146,75 @@ def verify_model_available(model_name):
 
 _OLLAMA_TIMEOUT = 120  # seconds before a generate call is considered hung
 
+def expand_query(original_query: str, model: str) -> list[str]:
+    """
+    Ask the LLM to produce 2-3 alternative phrasings of *original_query* so that
+    imperfect Whisper transcriptions (e.g. "fate" → "FADEC") still hit relevant
+    chunks in ChromaDB.  Returns a deduplicated list that always starts with the
+    original query.  Falls back to [original_query] on any error.
+    """
+    expansion_prompt = (
+        "You are a search-query expansion assistant for an aviation/aerospace technical manual RAG system.\n"
+        "Given a user query that may contain mis-transcribed technical terms, produce exactly 2 alternative "
+        "search queries that cover likely correct technical spellings or synonyms.\n"
+        "Rules:\n"
+        "- Output ONLY the 2 alternative queries, one per line, no numbering, no explanations.\n"
+        "- Keep each query short (under 15 words).\n"
+        "- Preserve the user's language (Spanish or English).\n\n"
+        f"Original query: {original_query}\n\n"
+        "Alternative queries:"
+    )
+    try:
+        resp = ollama_generate_with_retry(
+            model=model,
+            prompt=expansion_prompt,
+            options={"temperature": 0.2, "num_ctx": 512},
+            max_retries=1,
+        )
+        raw = resp.get('response', '').strip()
+        alternatives = [ln.strip() for ln in raw.splitlines() if ln.strip()][:2]
+        # deduplicate while keeping original first
+        seen = {original_query.lower()}
+        queries = [original_query]
+        for alt in alternatives:
+            if alt.lower() not in seen:
+                seen.add(alt.lower())
+                queries.append(alt)
+        log_message(f"[QE] Expanded '{original_query[:60]}' → {queries}")
+        return queries
+    except Exception as e:
+        log_message(f"[QE] Expansion failed, using original query: {e}", "WARN")
+        return [original_query]
+
+
+def rag_query_expanded(queries: list[str], n_results: int, where_clause) -> tuple[list, list]:
+    """
+    Run collection.query() for each query variant and merge results,
+    deduplicating by document text hash.  Returns (documents, metadatas).
+    """
+    seen_hashes: set = set()
+    merged_docs: list = []
+    merged_metas: list = []
+
+    for q in queries:
+        try:
+            res = collection.query(
+                query_texts=[q],
+                n_results=n_results,
+                where=where_clause,
+            )
+            for doc, meta in zip(res['documents'][0], res['metadatas'][0]):
+                h = hashlib.md5(doc.encode('utf-8', errors='replace')).hexdigest()
+                if h not in seen_hashes:
+                    seen_hashes.add(h)
+                    merged_docs.append(doc)
+                    merged_metas.append(meta)
+        except Exception as e:
+            log_message(f"[QE] Sub-query failed for '{q[:60]}': {e}", "WARN")
+
+    return merged_docs, merged_metas
+
+
 def ollama_generate_with_retry(model, prompt, options=None, max_retries=2):
     """
     Call ollama.generate() with a timeout and exponential-backoff retry.
@@ -1070,29 +1139,28 @@ def query_text():
         if not query:
             return jsonify({'error': 'No query provided'}), 400
         
-        where_clause = {}
-        if manual_filter:
-            where_clause = {"manual_name": manual_filter}
-        
-        results = collection.query(
-            query_texts=[query],
-            n_results=n_results,
-            where=where_clause if where_clause else None
-        )
-        
-        if not results['documents'] or not results['documents'][0]:
+        where_clause = {"manual_name": manual_filter} if manual_filter else None
+
+        with model_lock:
+            active_model_for_expansion = current_ollama_model
+
+        # ── Query expansion: generate alternative phrasings to improve recall ──
+        queries = expand_query(query, active_model_for_expansion)
+        merged_docs, merged_metas = rag_query_expanded(queries, n_results, where_clause)
+
+        if not merged_docs:
             return jsonify({
                 'success': True,
                 'answer': 'No encontré información relevante en los manuales.',
                 'sources': [],
                 'model_used': current_ollama_model
             })
-        
+
         context_parts = []
         sources = []
         page_references = []
-        
-        for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
+
+        for doc, metadata in zip(merged_docs, merged_metas):
             context_parts.append(doc)
             manual = metadata['manual_name']
             page = metadata['page']
@@ -1101,9 +1169,8 @@ def query_text():
         
         context = '\n\n'.join(context_parts)
 
-        with model_lock:
-            active_model = current_ollama_model
-        
+        active_model = active_model_for_expansion  # already acquired above
+
         # PROMPT OPTIMIZADO: Más permisivo y enfocado en síntesis
         prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
 
@@ -1164,13 +1231,14 @@ def query_stream():
 
         where_clause = {"manual_name": manual_filter} if manual_filter else None
 
-        results = collection.query(
-            query_texts=[query],
-            n_results=n_results,
-            where=where_clause
-        )
+        with model_lock:
+            active_model = current_ollama_model
 
-        if not results['documents'] or not results['documents'][0]:
+        # ── Query expansion ──
+        queries = expand_query(query, active_model)
+        merged_docs, merged_metas = rag_query_expanded(queries, n_results, where_clause)
+
+        if not merged_docs:
             def empty_stream():
                 yield f"data: {json.dumps({'done': True, 'answer': 'No encontré información relevante en los manuales.', 'sources': [], 'model_used': current_ollama_model})}\n\n"
             return Response(stream_with_context(empty_stream()), mimetype='text/event-stream',
@@ -1179,7 +1247,7 @@ def query_stream():
         context_parts = []
         sources = []
         page_references = []
-        for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
+        for doc, metadata in zip(merged_docs, merged_metas):
             context_parts.append(doc)
             manual = metadata['manual_name']
             page = metadata['page']
@@ -1187,9 +1255,6 @@ def query_stream():
             page_references.append(f"(Manual: {manual}, Página: {page})")
 
         context = '\n\n'.join(context_parts)
-
-        with model_lock:
-            active_model = current_ollama_model
 
         prompt = f"""Eres un experto técnico multilingüe. Tu misión es ayudar al usuario basándote únicamente en los manuales proporcionados.
 
@@ -1287,20 +1352,23 @@ def query_audio():
             if not query:
                 return jsonify({'error': 'No speech detected'}), 400
 
-            # ── STEP 2: RAG retrieval ──
+            # ── STEP 2: RAG retrieval with query expansion ──
+            # Query expansion is especially important here because Whisper may mis-transcribe
+            # technical terms (e.g. "fadec" → "fate"). Expanding before vector search
+            # significantly improves recall for imperfect voice transcriptions.
             t_rag = time.time()
             where_clause = {"manual_name": manual_filter} if manual_filter else None
 
-            results = collection.query(
-                query_texts=[query],
-                n_results=5,
-                where=where_clause
-            )
-            rag_ms = int((time.time() - t_rag) * 1000)
-            n_docs = len(results['documents'][0]) if results['documents'][0] else 0
-            log_message(f"[AUDIO] RAG done in {rag_ms}ms — {n_docs} chunks retrieved")
+            with model_lock:
+                active_model = current_ollama_model
 
-            if not results['documents'][0]:
+            queries = expand_query(query, active_model)
+            merged_docs, merged_metas = rag_query_expanded(queries, n_results=5, where_clause=where_clause)
+
+            rag_ms = int((time.time() - t_rag) * 1000)
+            log_message(f"[AUDIO] RAG+QE done in {rag_ms}ms — {len(merged_docs)} unique chunks retrieved (queries: {len(queries)})")
+
+            if not merged_docs:
                 return jsonify({
                     'success': True,
                     'transcription': query,
@@ -1314,7 +1382,7 @@ def query_audio():
             sources = []
             page_references = []
 
-            for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
+            for doc, metadata in zip(merged_docs, merged_metas):
                 context_parts.append(doc)
                 manual = metadata['manual_name']
                 page = metadata['page']
@@ -1325,8 +1393,6 @@ def query_audio():
 
             # ── STEP 3: LLM generation ──
             t_llm = time.time()
-            with model_lock:
-                active_model = current_ollama_model
             log_message(f"[AUDIO] LLM starting — model={active_model}")
 
             if detected_language == 'en':
