@@ -56,11 +56,11 @@ available_models = []
 model_lock = threading.Lock()
 
 # Configuration
-WHISPER_MODEL_SIZE = "small"          # small=244M multilingual, medium=769M for best Spanish accuracy
-WHISPER_LANGUAGE = None               # None = auto-detect (supports Spanish + English)
-WHISPER_DEVICE = "auto"               # auto = CUDA if available, else CPU
+WHISPER_MODEL_SIZE = "medium"         # medium=769M — best Spanish accuracy (primary language)
+WHISPER_LANGUAGE = None               # None = auto-detect (Spanish primary, English secondary)
+WHISPER_DEVICE = "auto"              # auto = CUDA if available, else CPU
 WHISPER_COMPUTE_TYPE = "auto"         # auto = float16 on GPU, int8 on CPU
-DEFAULT_OLLAMA_MODEL = "qwen2.5:1.5b"
+DEFAULT_OLLAMA_MODEL = "qwen3:1.7b"   # Qwen3: 99% Spanish native, 99% English native
 USE_SSL = True                        # HTTPS required for Meta Quest WebXR
 SERVER_PORT = 5000
 CHUNK_SIZE = 1000
@@ -499,10 +499,13 @@ def initialize_components():
         if current_ollama_model not in models:
             log_message(f"Configured model '{current_ollama_model}' not found", "WARN")
             
-            # Try legacy model
-            if "llama3.2:3b" in models:
-                log_message(f"Using legacy model: llama3.2:3b")
-                current_ollama_model = "llama3.2:3b"
+            # Prefer best available in priority order
+            preferred = ["qwen3:4b", "qwen3:1.7b", "phi4-mini", "qwen3:8b",
+                         "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b"]
+            found = next((m for m in preferred if m in models), None)
+            if found:
+                log_message(f"Using best available model: {found}")
+                current_ollama_model = found
                 save_config()
             elif DEFAULT_OLLAMA_MODEL in models:
                 log_message(f"Using default: {DEFAULT_OLLAMA_MODEL}")
@@ -513,14 +516,21 @@ def initialize_components():
                 current_ollama_model = models[0]
                 save_config()
             else:
-                log_message("No models available!", "ERROR")
-                return False
-        
-        log_message(f"Active model: {current_ollama_model} [OK]")
-        
+                log_message("No models available - server starting in degraded mode", "WARN")
+                log_message("Download a model from the launcher to enable AI queries", "WARN")
+                current_ollama_model = None
+                # Non-fatal: server starts, queries return a clear error
+
+        if current_ollama_model:
+            log_message(f"Active model: {current_ollama_model} [OK]")
+        else:
+            log_message("No active model - use the launcher Download section to install one", "WARN")
+
     except Exception as e:
         log_message(f"Ollama verification failed: {str(e)}", "ERROR")
-        return False
+        log_message("Server starting without Ollama - queries will fail until Ollama runs", "WARN")
+        current_ollama_model = None
+        # Non-fatal: server starts in degraded mode
     
     load_manuals_metadata()
     
@@ -721,11 +731,13 @@ def index_multiple_manuals_batch(pdf_paths, task_id):
 def health_check():
     total_chunks = collection.count() if collection else 0
     
+    available = get_available_models()
     return jsonify({
         'status': 'healthy',
         'whisper_loaded': whisper_model is not None,
         'ollama_model': current_ollama_model,
-        'available_models': get_available_models(),
+        'available_models': available,
+        'no_model_available': current_ollama_model is None or len(available) == 0,
         'bilingual_mode': True,
         'supported_languages': ['es', 'en'],
         'indexed_manuals': len(indexed_manuals),
@@ -1021,13 +1033,20 @@ def clear_all_database():
 
 @app.route('/query', methods=['POST'])
 def query_text():
+    if not current_ollama_model:
+        return jsonify({
+            'error': 'No AI model installed. Open the launcher, select a model in the Download dropdown, and click Download.',
+            'success': False,
+            'no_model': True
+        }), 503
+
     try:
         data = request.get_json()
         query = data.get('query', '')
         manual_filter = data.get('manual_name')
         # Aumentamos n_results de 3 a 6 para capturar más contexto
-        n_results = data.get('n_results', 7) 
-        
+        n_results = data.get('n_results', 7)
+
         if not query:
             return jsonify({'error': 'No query provided'}), 400
         
@@ -1066,14 +1085,15 @@ def query_text():
         with model_lock:
             active_model = current_ollama_model
         
-        prompt = f"""Answer ONLY using the manual context below. Maximum 2-3 sentences. Never start with intro phrases like "Based on...", "According to...", "What I found...", "Here is...", "This is..." or similar. Just state the fact directly. End with: Source: [Manual], page [number]. Respond in the user's language.
+        prompt = f"""Eres un asistente técnico bilingüe (español/inglés). Responde ÚNICAMENTE con la información del contexto del manual. Máximo 2-3 frases. No uses frases introductorias como "Según...", "De acuerdo con...", "Basándome en..." — ve directo al dato. Termina siempre con: Fuente: [Manual], página [número]. /no_think
+Responde en el mismo idioma que la pregunta (español si la pregunta es en español, English if the question is in English).
 
-Context:
+Contexto:
 {context}
 
-Question: {query}
+Pregunta: {query}
 
-Answer:"""
+Respuesta:"""
 
         log_message(f"Query using model: {active_model}")
 
@@ -1106,6 +1126,13 @@ Answer:"""
 
 @app.route('/query_audio', methods=['POST'])
 def query_audio():
+    if not current_ollama_model:
+        return jsonify({
+            'error': 'No AI model installed. Open the launcher, select a model in the Download dropdown, and click Download.',
+            'success': False,
+            'no_model': True
+        }), 503
+
     if whisper_model is None:
         return jsonify({'error': 'Speech recognition is not available. Check server logs for Whisper initialization errors.'}), 503
 
@@ -1192,14 +1219,15 @@ def query_audio():
                 active_model = current_ollama_model
             log_message(f"[AUDIO] LLM starting — model={active_model}")
 
-            prompt = f"""Answer ONLY using the manual context below. Maximum 2-3 sentences. Never start with intro phrases like "Based on...", "According to...", "What I found...", "Here is...", "This is..." or similar. Just state the fact directly. End with: Source: [Manual], page [number]. Respond in the user's language.
+            prompt = f"""Eres un asistente técnico bilingüe (español/inglés). Responde ÚNICAMENTE con la información del contexto del manual. Máximo 2-3 frases. No uses frases introductorias como "Según...", "De acuerdo con...", "Basándome en..." — ve directo al dato. Termina siempre con: Fuente: [Manual], página [número]. /no_think
+Responde en el mismo idioma que la pregunta (español si la pregunta es en español, English if the question is in English).
 
-Context:
+Contexto:
 {context}
 
-Question: {query}
+Pregunta: {query}
 
-Answer:"""
+Respuesta:"""
 
             response = ollama.generate(
                 model=active_model,

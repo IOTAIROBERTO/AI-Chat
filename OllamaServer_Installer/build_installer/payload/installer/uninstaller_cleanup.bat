@@ -146,48 +146,77 @@ title VR Training AI Server - Uninstalling... [3/8] Removing app files
 echo [PHASE 3/8] Deleting application files...
 echo.
 
-:: Get installation directory from registry or use default
-set "INSTALL_DIR="
-for /f "tokens=2*" %%a in ('reg query "HKLM\SOFTWARE\VR Training AI Server" /v InstallPath 2^>nul ^| findstr InstallPath') do (
-    set "INSTALL_DIR=%%b"
-)
+:: Priority 1: Use the directory passed as argument from the Inno Setup uninstaller
+set "INSTALL_DIR=%~1"
 
-:: Fallback to common locations
+:: Priority 2: Read from Inno Setup registry key (AppId-based)
 if "%INSTALL_DIR%"=="" (
-    if exist "%ProgramFiles%\VR Training AI Server" (
-        set "INSTALL_DIR=%ProgramFiles%\VR Training AI Server"
-    ) else if exist "%LocalAppData%\VR Training AI Server" (
-        set "INSTALL_DIR=%LocalAppData%\VR Training AI Server"
-    ) else if exist "C:\VR Training AI Server" (
-        set "INSTALL_DIR=C:\VR Training AI Server"
+    for /f "tokens=2*" %%a in ('reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1" /v InstallLocation 2^>nul ^| findstr InstallLocation') do (
+        set "INSTALL_DIR=%%b"
     )
 )
+
+:: Priority 3: Fallback to known folder names in common locations
+if "%INSTALL_DIR%"=="" (
+    if exist "%ProgramFiles%\TRAINING AI SERVER" (
+        set "INSTALL_DIR=%ProgramFiles%\TRAINING AI SERVER"
+    ) else if exist "%ProgramFiles(x86)%\TRAINING AI SERVER" (
+        set "INSTALL_DIR=%ProgramFiles(x86)%\TRAINING AI SERVER"
+    ) else if exist "%LocalAppData%\TRAINING AI SERVER" (
+        set "INSTALL_DIR=%LocalAppData%\TRAINING AI SERVER"
+    ) else if exist "C:\TRAINING AI SERVER" (
+        set "INSTALL_DIR=C:\TRAINING AI SERVER"
+    )
+)
+
+:: Strip trailing backslash if present
+if "%INSTALL_DIR:~-1%"=="\" set "INSTALL_DIR=%INSTALL_DIR:~0,-1%"
 
 if not "%INSTALL_DIR%"=="" (
     if exist "%INSTALL_DIR%" (
         echo   [INFO] Removing: %INSTALL_DIR%
-        
+
+        :: Wait briefly so any running processes have a chance to exit
+        timeout /t 3 /nobreak >nul
+
         :: Try normal deletion first
         rd /s /q "%INSTALL_DIR%" >nul 2>&1
-        
-        :: If that fails, try with takeown
+
+        :: If that fails, take ownership and retry
         if exist "%INSTALL_DIR%" (
             echo   [INFO] Forcing deletion with elevated permissions...
             takeown /f "%INSTALL_DIR%" /r /d y >nul 2>&1
             icacls "%INSTALL_DIR%" /grant administrators:F /t >nul 2>&1
             rd /s /q "%INSTALL_DIR%" >nul 2>&1
         )
-        
+
         if not exist "%INSTALL_DIR%" (
             echo   [OK] Application files deleted
         ) else (
-            echo   [WARN] Could not delete all files (may be in use)
+            echo   [WARN] Could not delete all files - scheduling removal on next reboot...
+            :: Schedule deletion on reboot as last resort
+            reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager" /v PendingFileRenameOperations /t REG_MULTI_SZ /d "\??\%INSTALL_DIR%\0\0" /f >nul 2>&1
+            echo   [INFO] Folder will be removed automatically on next Windows restart.
         )
     ) else (
         echo   [SKIP] Installation directory not found
     )
 ) else (
-    echo   [SKIP] Installation path not found in registry
+    echo   [SKIP] Installation path could not be determined - nothing to remove
+)
+
+:: Also remove LocalAppData folder created by the installer
+set "LOCALAPP_DIR=%LOCALAPPDATA%\TRAINING AI SERVER"
+if exist "%LOCALAPP_DIR%" (
+    echo   [INFO] Removing local app data: %LOCALAPP_DIR%
+    rd /s /q "%LOCALAPP_DIR%" >nul 2>&1
+    if not exist "%LOCALAPP_DIR%" (
+        echo   [OK] Local app data deleted
+    ) else (
+        echo   [WARN] Could not delete local app data
+    )
+) else (
+    echo   [SKIP] Local app data folder not found
 )
 
 echo.
@@ -236,16 +265,17 @@ if exist "%APPDATA_DIR%" (
     echo   [SKIP] App data not found
 )
 
-:: Local app data directory
-set "LOCALAPPDATA_DIR=%LOCALAPPDATA%\VR Training AI Server"
-if exist "%LOCALAPPDATA_DIR%" (
-    echo   [4.4] Deleting local app data: %LOCALAPPDATA_DIR%
-    rd /s /q "%LOCALAPPDATA_DIR%" >nul 2>&1
-    if not exist "%LOCALAPPDATA_DIR%" (
-        echo   [OK] Local app data deleted
+:: Local app data directory (both possible names)
+for %%D in ("%LOCALAPPDATA%\TRAINING AI SERVER" "%LOCALAPPDATA%\VR Training AI Server") do (
+    if exist %%D (
+        echo   [4.4] Deleting local app data: %%D
+        rd /s /q %%D >nul 2>&1
+        if not exist %%D (
+            echo   [OK] Local app data deleted
+        ) else (
+            echo   [WARN] Could not delete: %%D
+        )
     )
-) else (
-    echo   [SKIP] Local app data not found
 )
 
 echo.

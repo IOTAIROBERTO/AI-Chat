@@ -2,14 +2,30 @@
 chcp 65001 >nul 2>&1
 setlocal EnableDelayedExpansion
 
-title TRAINING AI SERVER - Installation
+:: ============================================================================
+:: TRAINING AI SERVER v5.0 - Silent Installer
+:: All output is automatically redirected to the install log.
+:: No CMD windows appear during installation.
+:: ============================================================================
+
+:: --- Self-logging bootstrap ---
+:: On first run (no SELF_LOGGING env var), re-execute this script with all
+:: output redirected to the log file, then exit. This hides all console output.
+if not defined SELF_LOGGING (
+    set "SELF_LOGGING=1"
+    if not exist "%~1\logs" mkdir "%~1\logs" 2>nul
+    cmd /c "%~f0" %* >> "%~1\logs\install.log" 2>&1
+    exit /b %ERRORLEVEL%
+)
+
+:: From here, all output goes to %INSTALL_DIR%\logs\install.log
 
 set "INSTALL_DIR=%~1"
 set "SETUP_LOG=%~2"
+set "MODELS_CFG=%~3"
 
 if "%INSTALL_DIR%"=="" (
-    echo ERROR: Installation directory not provided
-    pause
+    echo [ERROR] No installation directory supplied to smart_installer.bat
     exit /b 1
 )
 
@@ -21,148 +37,226 @@ if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%" 2>nul
 
 echo.
 echo ========================================================================
-echo                    TRAINING AI SERVER v4.2
-echo                 Bilingual Installation (ES/EN)
+echo   TRAINING AI SERVER v5.0 - Installation Engine
+echo   %DATE%  %TIME%
 echo ========================================================================
 echo.
 
+:: ============================================================================
+:: PHASE 1/9 - Administrator privilege check
+:: ============================================================================
 echo [PHASE 1/9] Checking administrator privileges...
 net session >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Administrator privileges required!
-    pause
+    echo [ERROR] Not running as administrator. Aborting.
     exit /b 1
 )
-echo [OK] Administrator privileges confirmed
+echo [OK] Running as administrator
 echo.
 
-echo [PHASE 2/9] Checking Python installation...
+:: ============================================================================
+:: PHASE 2/9 - Python 3.11+ installation
+:: ============================================================================
+echo [PHASE 2/9] Locating Python 3.11+...
 set "PYTHON_CMD="
-where python.exe >nul 2>&1
+
+:: Check if python already exists AND version is >= 3.11
+python --version >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-    for /f "delims=" %%p in ('where python.exe') do (
-        set "PYTHON_CMD=%%p"
+    for /f "tokens=2 delims=." %%v in ('python --version 2^>^&1') do set "PY_MINOR=%%v"
+    if !PY_MINOR! geq 11 (
+        for /f "delims=" %%p in ('where python.exe 2^>nul') do (
+            set "PYTHON_CMD=%%p"
+            echo [OK] Found compatible Python in PATH: !PYTHON_CMD!
+            goto :PYTHON_FOUND
+        )
+    ) else (
+        echo [WARN] Python found but version too old (minor=!PY_MINOR!), need 3.11+
+    )
+)
+
+:: Scan common install paths before downloading
+for %%p in (
+    "%LocalAppData%\Programs\Python\Python313\python.exe"
+    "%LocalAppData%\Programs\Python\Python312\python.exe"
+    "%LocalAppData%\Programs\Python\Python311\python.exe"
+    "C:\Python313\python.exe"
+    "C:\Python312\python.exe"
+    "C:\Python311\python.exe"
+) do (
+    if exist %%p (
+        set "PYTHON_CMD=%%~p"
+        echo [OK] Found Python at: !PYTHON_CMD!
         goto :PYTHON_FOUND
     )
 )
 
-echo [INFO] Python not found, installing...
-echo [INFO] This may take 1-2 minutes...
-winget install Python.Python.3.11 -e --silent --accept-source-agreements --accept-package-agreements
-
+:: Attempt 1: winget (Windows 10 2004+)
+echo [INFO] Python 3.11+ not found. Attempting winget install...
+winget install Python.Python.3.11 -e --silent --accept-source-agreements --accept-package-agreements >nul 2>&1
 if !ERRORLEVEL! equ 0 (
-    echo [OK] Python installed
-    timeout /t 5 /nobreak >nul
-    
-    where python.exe >nul 2>&1
-    if !ERRORLEVEL! equ 0 (
-        for /f "delims=" %%p in ('where python.exe') do (
-            set "PYTHON_CMD=%%p"
+    echo [INFO] winget install complete. Refreshing PATH...
+    call :REFRESH_PATH
+    timeout /t 6 /nobreak >nul
+    for /f "delims=" %%p in ('where python.exe 2^>nul') do (
+        set "PYTHON_CMD=%%p"
+        echo [OK] Python ready via winget: !PYTHON_CMD!
+        goto :PYTHON_FOUND
+    )
+    echo [WARN] winget reported success but python.exe not in PATH - scanning paths...
+    for %%p in (
+        "%LocalAppData%\Programs\Python\Python311\python.exe"
+        "C:\Python311\python.exe"
+    ) do (
+        if exist %%p (
+            set "PYTHON_CMD=%%~p"
+            echo [OK] Found at: !PYTHON_CMD!
             goto :PYTHON_FOUND
         )
-    ) else (
-        echo [ERROR] Python installed but not found in PATH
-        pause
-        exit /b 20
     )
-) else (
-    echo [ERROR] Python installation failed
-    pause
+)
+
+:: Attempt 2: Direct MSI download from python.org
+echo [WARN] winget failed. Downloading Python 3.11.9 installer directly...
+set "PY_MSI=%TEMP_DIR%\python-3.11.9-amd64.exe"
+call :DOWNLOAD_WITH_RETRY "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" "%PY_MSI%" 3
+if !ERRORLEVEL! neq 0 (
+    echo [ERROR] Cannot download Python installer. Check internet connection.
     exit /b 21
 )
 
+echo [INFO] Running Python 3.11.9 silent installer...
+"%PY_MSI%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_doc=0 Include_launcher=0
+if !ERRORLEVEL! neq 0 (
+    echo [ERROR] Python silent installer failed (exit code !ERRORLEVEL!)
+    exit /b 22
+)
+
+call :REFRESH_PATH
+timeout /t 6 /nobreak >nul
+
+for /f "delims=" %%p in ('where python.exe 2^>nul') do (
+    set "PYTHON_CMD=%%p"
+    echo [OK] Python installed and found: !PYTHON_CMD!
+    goto :PYTHON_FOUND
+)
+:: Final path scan after install
+for %%p in (
+    "%LocalAppData%\Programs\Python\Python311\python.exe"
+    "C:\Python311\python.exe"
+) do (
+    if exist %%p (
+        set "PYTHON_CMD=%%~p"
+        goto :PYTHON_FOUND
+    )
+)
+
+echo [ERROR] Python installation completed but executable cannot be located.
+exit /b 23
+
 :PYTHON_FOUND
-echo [OK] Python ready
+echo [OK] Python executable confirmed: %PYTHON_CMD%
 echo.
 
+:: ============================================================================
+:: PHASE 3/9 - Python dependencies
+:: ============================================================================
 echo [PHASE 3/9] Installing Python dependencies...
-echo [INFO] This may take 2-5 minutes depending on internet speed...
-echo [INFO] Please wait while packages are downloaded and installed...
-echo.
+echo [INFO] This step takes 3-8 minutes. Downloading Flask, ChromaDB, Whisper...
 
 set "REQUIREMENTS_FILE=%INSTALL_DIR%\server\requirements.txt"
-
 if not exist "%REQUIREMENTS_FILE%" (
-    echo [ERROR] requirements.txt not found
-    pause
+    echo [ERROR] requirements.txt not found: %REQUIREMENTS_FILE%
     exit /b 30
 )
 
-echo   Step 1/2: Upgrading pip...
-"%PYTHON_CMD%" -m pip install --upgrade pip
+echo [INFO] Upgrading pip...
+"%PYTHON_CMD%" -m pip install --upgrade pip --quiet 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [WARN] Could not upgrade pip, continuing anyway...
+    echo [WARN] pip upgrade failed - continuing with current version
 )
 
-echo.
-echo   Step 2/2: Installing dependencies (Flask, ChromaDB, Ollama, etc.)...
-echo   This is the longest step - please be patient...
-echo.
-
-"%PYTHON_CMD%" -m pip install -r "%REQUIREMENTS_FILE%"
-
+echo [INFO] Installing packages from requirements.txt...
+"%PYTHON_CMD%" -m pip install -r "%REQUIREMENTS_FILE%" --quiet 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Failed to install dependencies
-    echo [INFO] You can try installing manually with:
-    echo        pip install -r "%REQUIREMENTS_FILE%"
-    pause
-    exit /b 31
+    echo [WARN] First attempt failed. Retrying without cache...
+    "%PYTHON_CMD%" -m pip install -r "%REQUIREMENTS_FILE%" --no-cache-dir --quiet 2>&1
+    if !ERRORLEVEL! neq 0 (
+        echo [ERROR] Failed to install Python dependencies after two attempts.
+        echo [INFO] See log: %LOG_DIR%\install.log
+        exit /b 31
+    )
 )
 
-echo.
-echo [OK] Dependencies installed successfully
+echo [OK] Python dependencies installed
 echo.
 
-echo [PHASE 4/9] Checking Ollama installation...
+:: ============================================================================
+:: PHASE 4/9 - Ollama installation
+:: ============================================================================
+echo [PHASE 4/9] Checking Ollama...
 set "OLLAMA_CMD="
+
 where ollama.exe >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     for /f "delims=" %%o in ('where ollama.exe') do (
         set "OLLAMA_CMD=%%o"
+        echo [OK] Ollama already installed: !OLLAMA_CMD!
         goto :OLLAMA_FOUND
     )
 )
 
-echo [INFO] Ollama not found, downloading installer...
+echo [INFO] Ollama not found. Downloading installer (~100MB)...
 set "OLLAMA_INSTALLER=%TEMP_DIR%\OllamaSetup.exe"
-
-powershell -NoProfile -Command "Write-Host '  Downloading Ollama... (~100MB)'; Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile '%OLLAMA_INSTALLER%'"
-
-if !ERRORLEVEL! neq 0 (
-    echo [ERROR] Failed to download Ollama
-    pause
+call :DOWNLOAD_WITH_RETRY "https://ollama.com/download/OllamaSetup.exe" "%OLLAMA_INSTALLER%" 3
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to download Ollama installer after 3 attempts.
     exit /b 40
 )
 
-echo [INFO] Installing Ollama...
+echo [INFO] Running Ollama silent installer...
 start /wait "" "%OLLAMA_INSTALLER%" /S
-timeout /t 5 /nobreak >nul
+timeout /t 10 /nobreak >nul
+
+call :REFRESH_PATH
 
 where ollama.exe >nul 2>&1
-if !ERRORLEVEL! equ 0 (
+if %ERRORLEVEL% equ 0 (
     for /f "delims=" %%o in ('where ollama.exe') do (
         set "OLLAMA_CMD=%%o"
+        echo [OK] Ollama installed: !OLLAMA_CMD!
         goto :OLLAMA_FOUND
     )
-) else (
-    echo [ERROR] Ollama installation failed
-    pause
-    exit /b 41
 )
 
+:: Ollama typically installs to LocalAppData
+if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
+    set "OLLAMA_CMD=%LocalAppData%\Programs\Ollama\ollama.exe"
+    echo [OK] Ollama found at default path: !OLLAMA_CMD!
+    goto :OLLAMA_FOUND
+)
+
+echo [ERROR] Ollama installation failed - executable not found after install.
+exit /b 41
+
 :OLLAMA_FOUND
-echo [OK] Ollama ready
+echo [OK] Ollama confirmed: %OLLAMA_CMD%
 echo.
 
+:: ============================================================================
+:: PHASE 5/9 - Start Ollama service
+:: ============================================================================
 echo [PHASE 5/9] Starting Ollama service...
 set "OLLAMA_STARTED_HERE=0"
+
 "%OLLAMA_CMD%" list >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo [OK] Ollama service already running
 ) else (
     set "OLLAMA_STARTED_HERE=1"
+    echo [INFO] Starting Ollama service...
     start /b "" "%OLLAMA_CMD%" serve
-    echo [INFO] Waiting for Ollama to be ready...
+    echo [INFO] Waiting for Ollama to be ready (up to 40s)...
     set "OLLAMA_READY=0"
     for /L %%i in (1,1,20) do (
         if "!OLLAMA_READY!"=="0" (
@@ -172,97 +266,178 @@ if %ERRORLEVEL% equ 0 (
         )
     )
     if "!OLLAMA_READY!"=="0" (
-        echo [ERROR] Ollama service did not respond after 40 seconds
-        pause
-        exit /b 40
+        echo [ERROR] Ollama service did not become ready within 40 seconds.
+        exit /b 42
     )
-    echo [OK] Ollama service ready
+    echo [OK] Ollama service is ready
 )
 echo.
 
-echo [PHASE 6/9] Downloading default AI model (qwen2.5:7b)...
-echo [INFO] This is a ~4.7GB download, please wait...
-echo [INFO] Progress will be shown below:
-echo.
+:: ============================================================================
+:: PHASE 6/9 - Download AI models (driven by GUI selection)
+:: ============================================================================
+echo [PHASE 6/9] Downloading AI models...
 
-"%OLLAMA_CMD%" list | findstr "qwen2.5:7b" >nul 2>&1
+:: Always install the base model
+set "BASE_MODEL=qwen3:1.7b"
+echo [INFO] Checking base model: %BASE_MODEL%
+"%OLLAMA_CMD%" list 2>nul | findstr /l "%BASE_MODEL%" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-    echo [OK] Default model already downloaded
+    echo [OK] %BASE_MODEL% already installed
 ) else (
-    "%OLLAMA_CMD%" pull qwen2.5:7b
+    echo [INFO] Downloading %BASE_MODEL% (~1.1 GB) - please wait, this may take several minutes...
+    "%OLLAMA_CMD%" pull %BASE_MODEL%
     if !ERRORLEVEL! neq 0 (
-        echo [ERROR] Model download failed
-        pause
-        exit /b 50
+        echo [WARN] First attempt failed. Retrying in 10 seconds...
+        timeout /t 10 /nobreak >nul
+        "%OLLAMA_CMD%" pull %BASE_MODEL%
+        if !ERRORLEVEL! neq 0 (
+            echo [ERROR] Failed to download base model %BASE_MODEL% after 2 attempts.
+            echo [ERROR] Check internet connection and try reinstalling.
+            exit /b 50
+        )
     )
-    echo [OK] Default model downloaded
+    echo [OK] %BASE_MODEL% downloaded successfully
 )
 echo.
 
-echo [PHASE 7/9] Optional model installation...
-echo.
-echo You can install additional models now:
-echo   1. qwen2.5:3b (1.9GB) - Balanced (lighter than default 7b)
-echo   2. llama3.2:1b (1.3GB) - Ultra-fast
-echo   3. llama3.2:3b (2.0GB) - Legacy
-echo.
-echo Note: You can always download more models later from the launcher
-echo.
-
-set /p "INSTALL_MODEL_1=Install qwen2.5:3b? (Y/N): "
-if /i "%INSTALL_MODEL_1%"=="Y" (
-    echo Downloading qwen2.5:3b...
-    "%OLLAMA_CMD%" pull qwen2.5:3b
-    echo.
+:: Download additional models selected in the GUI (read from config file)
+if exist "%MODELS_CFG%" (
+    echo [INFO] Reading optional model selections from installer...
+    for /f "usebackq delims=" %%m in ("%MODELS_CFG%") do (
+        set "OPT_MODEL=%%m"
+        :: Trim spaces
+        set "OPT_MODEL=!OPT_MODEL: =!"
+        :: Skip blank lines and the base model (already installed)
+        if not "!OPT_MODEL!"=="" if not "!OPT_MODEL!"=="%BASE_MODEL%" (
+            echo [INFO] Checking optional model: !OPT_MODEL!
+            "%OLLAMA_CMD%" list 2>nul | findstr /l "!OPT_MODEL!" >nul 2>&1
+            if !ERRORLEVEL! equ 0 (
+                echo [OK] !OPT_MODEL! already installed
+            ) else (
+                echo [INFO] Downloading !OPT_MODEL! - please wait...
+                "%OLLAMA_CMD%" pull !OPT_MODEL!
+                if !ERRORLEVEL! neq 0 (
+                    echo [WARN] Could not download !OPT_MODEL! - skipping.
+                    echo [INFO] You can download it later from the launcher.
+                ) else (
+                    echo [OK] !OPT_MODEL! downloaded successfully
+                )
+            )
+            echo.
+        )
+    )
+) else (
+    echo [INFO] No model config found - only base model installed.
 )
 
-set /p "INSTALL_MODEL_2=Install llama3.2:1b? (Y/N): "
-if /i "%INSTALL_MODEL_2%"=="Y" (
-    echo Downloading llama3.2:1b...
-    "%OLLAMA_CMD%" pull llama3.2:1b
-    echo.
-) 
+:: ============================================================================
+:: PHASE 7/9 - Determine best installed model for server config
+:: ============================================================================
+echo [PHASE 7/9] Determining optimal default model...
+set "DEFAULT_MODEL=%BASE_MODEL%"
 
-echo [PHASE 8/9] Configuring firewall & security...
+:: Prefer highest quality installed model as the default (priority order)
+for %%m in ("qwen3:4b" "phi4-mini" "qwen3:8b" "gemma3:4b") do (
+    "%OLLAMA_CMD%" list 2>nul | findstr /l %%m >nul 2>&1
+    if !ERRORLEVEL! equ 0 set "DEFAULT_MODEL=%%~m"
+)
+
+echo [OK] Default model set to: %DEFAULT_MODEL%
+echo.
+
+:: ============================================================================
+:: PHASE 8/9 - Firewall and security
+:: ============================================================================
+echo [PHASE 8/9] Configuring firewall and security...
+
 if exist "%INSTALL_DIR%\installer\configure_security.bat" (
     call "%INSTALL_DIR%\installer\configure_security.bat" "%INSTALL_DIR%"
 ) else (
-    echo [WARN] Security configuration script not found!
-    echo [WARN] Falling back to basic firewall rule...
-    netsh advfirewall firewall add rule name="TRAINING AI SERVER" dir=in action=allow protocol=TCP localport=5000-5010 profile=any >nul 2>&1
+    echo [WARN] configure_security.bat not found. Applying minimal firewall rule...
+    netsh advfirewall firewall add rule name="TRAINING AI SERVER" ^
+        dir=in action=allow protocol=TCP localport=5000-5010 profile=any >nul 2>&1
 )
+
+:: Add Defender exclusion for the install directory (speeds up ChromaDB/Whisper)
+powershell -NoProfile -Command ^
+    "try { Add-MpPreference -ExclusionPath '%INSTALL_DIR%' -ErrorAction Stop } catch {}" >nul 2>&1
+
 echo [OK] Security configured
 echo.
 
-echo [PHASE 9/9] Creating configuration...
+:: ============================================================================
+:: PHASE 9/9 - Create server configuration
+:: ============================================================================
+echo [PHASE 9/9] Writing server configuration...
 set "CONFIG_FILE=%INSTALL_DIR%\server\server_config.json"
+
 (
     echo {
-    echo   "current_model": "qwen2.5:7b",
+    echo   "current_model": "%DEFAULT_MODEL%",
     echo   "bilingual_mode": true,
+    echo   "primary_language": "es",
     echo   "supported_languages": ["es", "en"]
     echo }
 ) > "%CONFIG_FILE%"
-echo [OK] Configuration created
+
+echo [OK] server_config.json created (default model: %DEFAULT_MODEL%)
 echo.
 
-echo ========================================================================
-echo              INSTALLATION COMPLETED SUCCESSFULLY!
-echo ========================================================================
-echo.
-echo Installation completed! / Instalacion completada!
-echo.
-echo The launcher will start automatically in a few seconds...
-echo El launcher se iniciara automaticamente en unos segundos...
-echo.
-echo If it doesn't start, you can run it manually from the Start Menu
-echo Si no inicia, puede ejecutarlo manualmente desde el Menu Inicio
-echo.
-
-:: Stop the Ollama instance we started during install so the window closes cleanly.
-:: The server launcher will start its own Ollama when the user runs the app.
+:: Stop the Ollama instance we started during install.
+:: The launcher will start its own Ollama on demand.
 if "!OLLAMA_STARTED_HERE!"=="1" (
+    echo [INFO] Stopping temporary Ollama service...
     taskkill /F /IM ollama.exe >nul 2>&1
 )
 
+echo.
+echo ========================================================================
+echo   INSTALLATION COMPLETE
+echo   %DATE%  %TIME%
+echo   Default model : %DEFAULT_MODEL%
+echo   Install path  : %INSTALL_DIR%
+echo   Log file      : %LOG_DIR%\install.log
+echo ========================================================================
+echo.
+
+exit /b 0
+
+:: ============================================================================
+:: SUBROUTINES
+:: ============================================================================
+
+:DOWNLOAD_WITH_RETRY
+:: Usage: call :DOWNLOAD_WITH_RETRY "URL" "OutputPath" MaxRetries
+set "_DL_URL=%~1"
+set "_DL_OUT=%~2"
+set "_DL_MAX=%~3"
+if "%_DL_MAX%"=="" set "_DL_MAX=3"
+set "_DL_ATTEMPT=0"
+
+:_DL_LOOP
+set /a _DL_ATTEMPT+=1
+echo [INFO] Download attempt %_DL_ATTEMPT%/%_DL_MAX%: %_DL_URL%
+powershell -NoProfile -Command ^
+    "Invoke-WebRequest -Uri '%_DL_URL%' -OutFile '%_DL_OUT%' -UseBasicParsing -TimeoutSec 300" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    if exist "%_DL_OUT%" exit /b 0
+)
+if %_DL_ATTEMPT% lss %_DL_MAX% (
+    echo [WARN] Download failed. Retrying in 5 seconds...
+    timeout /t 5 /nobreak >nul
+    goto :_DL_LOOP
+)
+echo [ERROR] Download failed after %_DL_MAX% attempts: %_DL_URL%
+exit /b 1
+
+:REFRESH_PATH
+:: Reload PATH from registry so newly installed tools are found immediately
+for /f "skip=2 tokens=3*" %%a in (
+    'reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul'
+) do set "_SYS_PATH=%%a %%b"
+for /f "skip=2 tokens=3*" %%a in (
+    'reg query "HKCU\Environment" /v Path 2^>nul'
+) do set "_USR_PATH=%%a %%b"
+set "PATH=!_SYS_PATH!;!_USR_PATH!"
 exit /b 0

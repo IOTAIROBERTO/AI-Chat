@@ -22,56 +22,56 @@ import json
 
 # BILINGUAL MODELS ONLY (Spanish/English native support)
 RECOMMENDED_MODELS = {
-    # === TIER 1: ESENCIALES (Descarga ESTOS) ===
-    'qwen2.5:1.5b': {
-        'size': '1.0 GB',
+    # === TIER 1: DEFAULT ===
+    'qwen3:1.7b': {
+        'size': '1.1 GB',
         'speed': '⚡⚡⚡⚡⚡',
         'quality': '⭐⭐⭐⭐⭐',
-        'spanish': '96% native',
-        'english': '98% native',
-        'description': '🔥 BEST - Default for VR/RAG',
+        'spanish': '99% nativo',
+        'english': '99% native',
+        'description': '🔥 DEFAULT - Rápido y bilingüe',
         'recommended': True,
         'category': 'Default'
     },
-    'qwen2.5:3b': {
-        'size': '1.9 GB',
+    # === TIER 2: RECOMENDADOS ===
+    'qwen3:4b': {
+        'size': '2.6 GB',
         'speed': '⚡⚡⚡⚡',
         'quality': '⭐⭐⭐⭐⭐',
-        'spanish': '98% native',
+        'spanish': '99% nativo',
         'english': '99% native',
-        'description': '⭐ PREMIUM - Best quality for RAG',
+        'description': '⭐ MEJOR CALIDAD - RAG bilingüe',
         'recommended': True,
-        'category': 'Quality'
+        'category': 'Recomendado'
     },
-    'granite3.1-dense:2b': {
-        'size': '1.3 GB',
-        'speed': '⚡⚡⚡⚡⚡',
-        'quality': '⭐⭐⭐⭐',
-        'spanish': '88% good',
-        'english': '96% native',
-        'description': '🏢 IBM - Optimized specifically for RAG',
-        'recommended': True,
-        'category': 'RAG Optimized'
-    },
-    
-    # === TIER 2: OPCIONALES (Si tienes espacio/necesitas) ===
-    'gemma2:2b': {
-        'size': '1.6 GB',
+    'phi4-mini': {
+        'size': '2.5 GB',
         'speed': '⚡⚡⚡⚡',
-        'quality': '⭐⭐⭐⭐',
-        'spanish': '90% good',
-        'english': '95% native',
-        'description': '💎 GOOGLE - Excellent reasoning for manuals',
+        'quality': '⭐⭐⭐⭐⭐',
+        'spanish': '97% nativo',
+        'english': '99% native',
+        'description': '🔬 Microsoft - Excepcional para Q&A documentos',
         'recommended': True,
-        'category': 'Balanced'
+        'category': 'Recomendado'
     },
-    'qwen2.5:7b': {
-        'size': '4.4 GB',
+    # === TIER 3: PREMIUM ===
+    'qwen3:8b': {
+        'size': '5.2 GB',
         'speed': '⚡⚡',
         'quality': '⭐⭐⭐⭐⭐',
-        'spanish': '99% native',
+        'spanish': '99% nativo',
         'english': '99% native',
-        'description': '💎 ULTIMATE - Best quality (slower, desktop only)',
+        'description': '💎 PREMIUM - Solo PC con 8 GB+ RAM',
+        'recommended': False,
+        'category': 'Premium'
+    },
+    'gemma3:4b': {
+        'size': '3.3 GB',
+        'speed': '⚡⚡⚡',
+        'quality': '⭐⭐⭐⭐⭐',
+        'spanish': '98% nativo',
+        'english': '99% native',
+        'description': '💡 Google - Excelente razonamiento',
         'recommended': False,
         'category': 'Premium'
     },
@@ -161,13 +161,13 @@ class ServerLauncher:
             if self.config_file.exists():
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.current_model = config.get('current_model', 'qwen2.5:1.5b')
+                    self.current_model = config.get('current_model', 'qwen3:1.7b')
                     self.server_port = config.get('port', 5000)
             else:
-                self.current_model = 'qwen2.5:1.5b'
+                self.current_model = 'qwen3:1.7b'
                 self.server_port = 5000
         except:
-            self.current_model = 'qwen2.5:1.5b'
+            self.current_model = 'qwen3:1.7b'
             self.server_port = 5000
     
     def save_config(self):
@@ -764,12 +764,17 @@ class ServerLauncher:
         self.download_progress_bar.stop()
         self.download_progress_frame.pack_forget()
         self.downloading_model = None
-        
+
         if success:
-            messagebox.showinfo("Success", f"'{model_name}' downloaded!")
+            self.log(f"✓ {model_name} descargado correctamente")
             self.refresh_models_list()
+            # If server has no active model, restart it now to pick up the new one
+            if self.server_running:
+                self.log("↺ Reiniciando servidor para activar el modelo...")
+                self.stop_server()
+                self.root.after(2000, self.start_server)
         else:
-            messagebox.showerror("Error", f"Failed to download '{model_name}'")
+            self.log(f"✗ Error al descargar '{model_name}'")
     
     def delete_selected_model(self):
         """Delete selected model from Ollama"""
@@ -883,7 +888,7 @@ class ServerLauncher:
         
         info_text += "\n\n" + "=" * 70 + "\n"
         info_text += "💡 RECOMMENDATIONS:\n\n"
-        info_text += "🥇 BEST DEFAULT: qwen2.5:1.5b\n"
+        info_text += "🥇 BEST DEFAULT: qwen3:1.7b\n"
         info_text += "   • Fastest bilingual model\n"
         info_text += "   • Native Spanish & English\n"
         info_text += "   • Replaces llama3.2:3b (2x faster)\n\n"
@@ -943,12 +948,12 @@ class ServerLauncher:
     def auto_refresh_manuals(self):
         if self.server_running:
             self.refresh_manuals_list()
-        self.root.after(5000, self.auto_refresh_manuals)
-    
+        self.root.after(30000, self.auto_refresh_manuals)
+
     def auto_refresh_models(self):
         if self.server_running:
             self.refresh_models_list(silent=True)
-        self.root.after(10000, self.auto_refresh_models)
+        self.root.after(30000, self.auto_refresh_models)
     
     def clear_all_database(self):
         if not self.server_running:
@@ -1265,8 +1270,10 @@ class ServerLauncher:
                         self.root.after(0, lambda: self.log(f"✓ Connected! Using: {self.server_protocol.upper()}:{self.server_port}"))
                         self.root.after(0, self.refresh_manuals_list)
                         self.root.after(0, self.refresh_models_list)
+                        # Check for missing models after UI settles
+                        self.root.after(1500, self._check_no_models_warning)
                         return
-                
+
                 # Si falla después de todos los intentos
                 self.root.after(0, lambda: self.log("✗ Server didn't respond after 28 seconds"))
                 self.root.after(0, lambda: self.log("ℹ️ Check logs/server_console.log for details"))
@@ -1275,17 +1282,102 @@ class ServerLauncher:
                     f"The server process started but is not responding.\n\n"
                     f"Check log: {server_log}\n\n"
                     "Common issues:\n"
+                    "• No AI models downloaded (use Download section)\n"
                     "• Ollama is not running\n"
                     "• Firewall/Antivirus blocking connection\n"
                     "• Ports 5000-5010 busy\n"
                 ))
-            
+
             threading.Thread(target=detect_protocol, daemon=True).start()
-            
+
         except Exception as e:
             self.log(f"✗ Failed: {str(e)}")
             messagebox.showerror("Error", str(e))
-    
+
+    def _check_no_models_warning(self):
+        """After server connects, auto-pull the base model if none are installed."""
+        try:
+            import requests as _req
+            resp = _req.get(
+                f"{self.server_protocol}://{self.server_ip}:{self.server_port}/health",
+                verify=False, timeout=5
+            )
+            data = resp.json()
+            if data.get('no_model_available', False) or not data.get('available_models'):
+                self._auto_pull_base_model()
+        except Exception:
+            pass  # Server still warming up - silent fail
+
+    def _auto_pull_base_model(self):
+        """Silently download the base model with no user interaction required."""
+        BASE_MODEL = "qwen3:1.7b"
+        self.log(f"⬇ No models found — auto-downloading base model {BASE_MODEL} (1.1 GB)...")
+
+        # Show the progress bar with auto-download message
+        self.downloading_model = BASE_MODEL
+        self.download_progress_frame.pack(fill='x', pady=(5, 0))
+        self.download_progress_label.config(text=f"Auto-installing {BASE_MODEL}... 0%")
+        self.download_progress_bar['mode'] = 'indeterminate'
+        self.download_progress_bar.start(15)
+
+        def do_auto_pull():
+            try:
+                process = subprocess.Popen(
+                    ['ollama', 'pull', BASE_MODEL],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True, encoding='utf-8', errors='ignore', bufsize=1
+                )
+
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    # Parse percentage progress if present
+                    if '%' in line:
+                        for part in line.split():
+                            if '%' in part:
+                                try:
+                                    pct = int(part.replace('%', ''))
+                                    self.root.after(0, lambda p=pct: (
+                                        self.download_progress_bar.config(
+                                            mode='determinate', value=p),
+                                        self.download_progress_label.config(
+                                            text=f"Auto-installing {BASE_MODEL}... {p}%")
+                                    ))
+                                except ValueError:
+                                    pass
+                    line_lower = line.lower().strip()
+                    if any(w in line_lower for w in ['pulling', 'downloading', 'verifying', 'success']):
+                        self.root.after(0, lambda l=line.strip(): self.log(f"  {l}"))
+
+                process.wait()
+
+                if process.returncode == 0:
+                    self.root.after(0, lambda: self._on_auto_pull_complete(BASE_MODEL, True))
+                else:
+                    self.root.after(0, lambda: self._on_auto_pull_complete(BASE_MODEL, False))
+
+            except Exception as e:
+                self.root.after(0, lambda: self.log(f"✗ Auto-pull error: {e}"))
+                self.root.after(0, lambda: self._on_auto_pull_complete(BASE_MODEL, False))
+
+        threading.Thread(target=do_auto_pull, daemon=True).start()
+
+    def _on_auto_pull_complete(self, model_name, success):
+        """Called when the automatic base model download finishes."""
+        self.download_progress_bar.stop()
+        self.download_progress_frame.pack_forget()
+        self.downloading_model = None
+
+        if success:
+            self.log(f"✓ {model_name} installed — restarting server...")
+            # Restart the server so it picks up the new model
+            self.stop_server()
+            self.root.after(2000, self.start_server)
+        else:
+            self.log(f"✗ Auto-download of {model_name} failed.")
+            self.log("  Open a terminal and run:  ollama pull qwen3:1.7b")
+
     def _tail_server_log(self, log_path):
         """Stream server_console.log into the GUI log panel in real time."""
         import time as _time

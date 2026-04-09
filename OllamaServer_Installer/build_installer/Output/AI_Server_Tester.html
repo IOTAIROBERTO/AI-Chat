@@ -433,7 +433,7 @@ async function runHealthCheck() {
         resetHealthUI();
 
         // Show cert helper if using https
-        if (getProto() === 'https' || err.message.includes('SSL') || err.message.includes('cert') || err.message.includes('fetch')) {
+        if (serverProto === 'https' || err.message.includes('SSL') || err.message.includes('cert') || err.message.includes('fetch')) {
             $('certIP').textContent   = $('ipAddr').value;
             $('certPort').textContent = $('port').value;
             $('certBanner').classList.add('visible');
@@ -766,7 +766,7 @@ function setStatus(msg) { $('statusText').textContent = msg; }
 // ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
-log('info', `Debug panel ready — protocol: ${getProto()}`);
+log('info', `Debug panel ready — protocol: ${serverProto}`);
 log('info', `Tip: access via https://IP:5000/admin for same-origin (no cert issues)`);
 </script>
 </body>

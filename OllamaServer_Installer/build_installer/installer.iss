@@ -1,9 +1,9 @@
 ; VR Training AI Server - Inno Setup Script
-; Version 4.1 - Bilingual Edition (Spanish/English)
-; MINIMAL VERSION - Only essential code that compiles
+; Version 5.0 - Robust Distributable Edition
+; Features: Pre-flight checks, GUI model selection, silent install, auto-launch
 
 #define MyAppName "TRAINING AI SERVER"
-#define MyAppVersion "4.1"
+#define MyAppVersion "5.0"
 #define MyAppPublisher "VR Training Solutions"
 #define MyAppURL "https://www.example.com"
 #define MyAppExeName "start_server.bat"
@@ -21,7 +21,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=installer_output
-OutputBaseFilename=TRAINING_AI_SERVER_v{#MyAppVersion}_Bilingual_Setup
+OutputBaseFilename=TRAINING_AI_SERVER_v{#MyAppVersion}_Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -37,12 +37,12 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Main Python files (UPDATED v4.1)
+; Main Python files
 Source: "payload\server\offline_server.py"; DestDir: "{app}\server"; Flags: ignoreversion
 Source: "payload\server\launcher.py"; DestDir: "{app}\server"; Flags: ignoreversion
 Source: "payload\server\requirements.txt"; DestDir: "{app}\server"; Flags: ignoreversion
 
-; Installer scripts (UPDATED v4.1)
+; Installer scripts
 Source: "payload\installer\smart_installer.bat"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "payload\installer\installer_lib.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "payload\installer\uninstaller_cleanup.bat"; DestDir: "{app}\installer"; Flags: ignoreversion skipifsourcedoesntexist
@@ -57,7 +57,7 @@ Source: "payload\utils\diagnose_connection.bat"; DestDir: "{app}\installer"; Fla
 ; Launcher scripts
 Source: "payload\start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
 
-; Documentation (UPDATED for v4.1)
+; Documentation
 Source: "README_BILINGUAL.md"; DestDir: "{app}"; DestName: "README.md"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "MIGRATION_FROM_LLAMA.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
@@ -82,7 +82,11 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "Launch VR Training AI Server"
 
 [Run]
-Filename: "{app}\installer\smart_installer.bat"; Parameters: """{app}"" ""{app}\logs\setup.log"""; StatusMsg: "Instalando componentes (Python, Ollama, dependencias)..."; Flags: waituntilterminated
+; Silent installation - no CMD window shown, all output goes to log file
+Filename: "{app}\installer\smart_installer.bat"; \
+  Parameters: """{app}"" ""{app}\logs\setup.log"" ""{tmp}\install_models.cfg"""; \
+  StatusMsg: "Installing AI components - this takes 15-30 min, please wait..."; \
+  Flags: runhidden waituntilterminated
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/F /IM python.exe /FI ""WINDOWTITLE eq *offline_server*"""; Flags: runhidden
@@ -99,41 +103,287 @@ Type: filesandordirs; Name: "{app}\__pycache__"
 Type: filesandordirs; Name: "{app}\server\__pycache__"
 Type: files; Name: "{app}\server\*.pyc"
 Type: files; Name: "{app}\server\server_config.json"
+Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{localappdata}\{#MyAppName}"
 
 [Code]
+// ============================================================================
+// CONSTANTS & VARIABLES
+// ============================================================================
+const
+  NL = #13#10;
+
 var
+  ModelPage: TWizardPage;
+  ChkModel7b: TNewCheckBox;
+  ChkModel3b: TNewCheckBox;
+  ChkModel1b: TNewCheckBox;
   InstallationSuccessful: Boolean;
+
+// ============================================================================
+// SYSTEM CAPABILITY CHECK
+// ============================================================================
+
+function GetRAMGB: Integer;
+var
+  ResultCode: Integer;
+  TempFile: String;
+  RamStr: AnsiString;
+begin
+  Result := 0;
+  TempFile := ExpandConstant('{tmp}\ramcheck.txt');
+  // PowerShell outputs RAM in GB as a simple integer
+  if Exec('powershell.exe',
+    '-NoProfile -Command "[Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB) | Out-File -FilePath ''' + TempFile + ''' -Encoding ASCII"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if LoadStringFromFile(TempFile, RamStr) then
+      Result := StrToIntDef(Trim(String(RamStr)), 0);
+  end;
+end;
+
+function CheckInternetConnectivity: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec('cmd.exe', '/C ping -n 1 -w 3000 8.8.8.8 >nul 2>&1',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := (ResultCode = 0);
+end;
+
+function CheckSystemRequirements: Boolean;
+var
+  FreeMB, TotalMB: Cardinal;
+  RamGB: Integer;
+  Msg: String;
+  HasCritical, HasWarning: Boolean;
+begin
+  HasCritical := False;
+  HasWarning := False;
+  Msg := 'System Compatibility Check:' + NL + NL;
+
+  // 64-bit architecture
+  if IsWin64 then
+    Msg := Msg + '[OK]   Architecture: 64-bit Windows' + NL
+  else begin
+    Msg := Msg + '[FAIL] Architecture: 32-bit detected  (64-bit required)' + NL;
+    HasCritical := True;
+  end;
+
+  // Disk space (need at least 20 GB free)
+  GetSpaceOnDisk(ExpandConstant('{autopf}'), True, FreeMB, TotalMB);
+  if FreeMB < 20480 then begin
+    Msg := Msg + '[FAIL] Disk Space: ' + IntToStr(FreeMB div 1024) +
+           ' GB free  (20 GB required)' + NL;
+    HasCritical := True;
+  end else if FreeMB < 30720 then begin
+    Msg := Msg + '[WARN] Disk Space: ' + IntToStr(FreeMB div 1024) +
+           ' GB free  (30 GB recommended for multiple models)' + NL;
+    HasWarning := True;
+  end else
+    Msg := Msg + '[OK]   Disk Space: ' + IntToStr(FreeMB div 1024) + ' GB free' + NL;
+
+  // RAM check
+  RamGB := GetRAMGB;
+  if RamGB < 4 then begin
+    Msg := Msg + '[FAIL] RAM: ' + IntToStr(RamGB) +
+           ' GB detected  (8 GB required)' + NL;
+    HasCritical := True;
+  end else if RamGB < 8 then begin
+    Msg := Msg + '[WARN] RAM: ' + IntToStr(RamGB) +
+           ' GB  (8 GB recommended, may run slowly)' + NL;
+    HasWarning := True;
+  end else
+    Msg := Msg + '[OK]   RAM: ' + IntToStr(RamGB) + ' GB' + NL;
+
+  // Internet connectivity
+  if CheckInternetConnectivity then
+    Msg := Msg + '[OK]   Internet: Connected' + NL
+  else begin
+    Msg := Msg + '[FAIL] Internet: Not available  (required to download components)' + NL;
+    HasCritical := True;
+  end;
+
+  if HasCritical then begin
+    MsgBox('INSTALLATION CANNOT CONTINUE' + NL + NL + Msg + NL +
+           'Please resolve the issues above and try again.',
+           mbError, MB_OK);
+    Result := False;
+  end else if HasWarning then begin
+    Result := MsgBox(Msg + NL +
+                     'Some warnings detected. The server may run slowly.' + NL +
+                     'Continue with installation?',
+                     mbConfirmation, MB_YESNO) = IDYES;
+  end else begin
+    Result := True;
+  end;
+end;
+
+// ============================================================================
+// MODEL SELECTION PAGE
+// ============================================================================
+
+procedure CreateModelSelectionPage;
+var
+  LblSection, LblBase, LblNote: TNewStaticText;
+begin
+  ModelPage := CreateCustomPage(wpReady,
+    'Select AI Models to Install / Seleccionar Modelos de IA',
+    'qwen3:1.7b is always installed automatically. Select extra models below (optional).');
+
+  // Base model (always installed)
+  LblSection := TNewStaticText.Create(ModelPage);
+  LblSection.Caption := 'Base model (always installed / siempre instalado):';
+  LblSection.Top := 0;
+  LblSection.Width := 460;
+  LblSection.Font.Style := [fsBold];
+  LblSection.Parent := ModelPage.Surface;
+
+  LblBase := TNewStaticText.Create(ModelPage);
+  LblBase.Caption := '   [v] qwen3:1.7b    1.0 GB    Fast & bilingual ES/EN';
+  LblBase.Top := 22;
+  LblBase.Width := 460;
+  LblBase.Parent := ModelPage.Surface;
+
+  // Section divider
+  LblSection := TNewStaticText.Create(ModelPage);
+  LblSection.Caption := 'Optional models (select to download / seleccionar para descargar):';
+  LblSection.Top := 52;
+  LblSection.Width := 460;
+  LblSection.Font.Style := [fsBold];
+  LblSection.Parent := ModelPage.Surface;
+
+  ChkModel7b := TNewCheckBox.Create(ModelPage);
+  ChkModel7b.Caption := 'qwen3:4b    2.6 GB    Mejor calidad para RAG bilingue  [Recomendado]';
+  ChkModel7b.Top := 74;
+  ChkModel7b.Width := 460;
+  ChkModel7b.Checked := False;
+  ChkModel7b.Parent := ModelPage.Surface;
+
+  ChkModel3b := TNewCheckBox.Create(ModelPage);
+  ChkModel3b.Caption := 'phi4-mini    2.5 GB    Microsoft - Excepcional para Q&A documentos';
+  ChkModel3b.Top := 100;
+  ChkModel3b.Width := 460;
+  ChkModel3b.Checked := False;
+  ChkModel3b.Parent := ModelPage.Surface;
+
+  ChkModel1b := TNewCheckBox.Create(ModelPage);
+  ChkModel1b.Caption := 'qwen3:8b    5.2 GB    Premium - Solo PC con 8 GB+ RAM';
+  ChkModel1b.Top := 126;
+  ChkModel1b.Width := 460;
+  ChkModel1b.Checked := False;
+  ChkModel1b.Parent := ModelPage.Surface;
+
+  LblNote := TNewStaticText.Create(ModelPage);
+  LblNote.Caption :=
+    'qwen3:1.7b (1.0 GB) is always downloaded — it is the required base model.' + NL +
+    'Extra models above are optional. You can download them later from the launcher.';
+  LblNote.Top := 165;
+  LblNote.Width := 460;
+  LblNote.Parent := ModelPage.Surface;
+end;
+
+procedure WriteModelConfig;
+var
+  ConfigFile, Models: String;
+begin
+  // Write selected models to temp file - one per line
+  // First line is always the base model (qwen3:1.7b)
+  ConfigFile := ExpandConstant('{tmp}\install_models.cfg');
+  Models := 'qwen3:1.7b';
+  if ChkModel7b.Checked then Models := Models + NL + 'qwen3:4b';
+  if ChkModel3b.Checked then Models := Models + NL + 'phi4-mini';
+  if ChkModel1b.Checked then Models := Models + NL + 'qwen3:8b';
+  SaveStringToFile(ConfigFile, Models, False);
+end;
+
+// ============================================================================
+// SERVER AUTO-LAUNCH
+// ============================================================================
+
+function FindPythonW: String;
+var
+  Paths: TArrayOfString;
+  i: Integer;
+begin
+  Result := '';
+  SetArrayLength(Paths, 10);
+  Paths[0] := ExpandConstant('{localappdata}\Programs\Python\Python313\pythonw.exe');
+  Paths[1] := ExpandConstant('{localappdata}\Programs\Python\Python312\pythonw.exe');
+  Paths[2] := ExpandConstant('{localappdata}\Programs\Python\Python311\pythonw.exe');
+  Paths[3] := 'C:\Python313\pythonw.exe';
+  Paths[4] := 'C:\Python312\pythonw.exe';
+  Paths[5] := 'C:\Python311\pythonw.exe';
+  Paths[6] := ExpandConstant('{pf}\Python313\pythonw.exe');
+  Paths[7] := ExpandConstant('{pf}\Python312\pythonw.exe');
+  Paths[8] := ExpandConstant('{pf32}\Python313\pythonw.exe');
+  Paths[9] := ExpandConstant('{pf32}\Python311\pythonw.exe');
+  for i := 0 to High(Paths) do
+    if FileExists(Paths[i]) then begin
+      Result := Paths[i];
+      Exit;
+    end;
+end;
+
+procedure LaunchServer;
+var
+  PythonW, LauncherPath: String;
+  ResultCode: Integer;
+begin
+  LauncherPath := ExpandConstant('{app}\server\launcher.py');
+  if not FileExists(LauncherPath) then Exit;
+
+  PythonW := FindPythonW;
+  if PythonW = '' then
+    PythonW := 'pythonw.exe'; // Rely on PATH as last resort
+
+  Exec(PythonW,
+    '"' + LauncherPath + '"',
+    ExpandConstant('{app}\server'),
+    SW_SHOW, ewNoWait, ResultCode);
+end;
+
+// ============================================================================
+// INNO SETUP EVENT HANDLERS
+// ============================================================================
+
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+
+  if not IsAdminLoggedOn then begin
+    MsgBox('Administrator privileges required.' + NL +
+           'Please right-click the installer and select "Run as administrator".' + NL +
+           NL + 'Se requieren privilegios de administrador.' + NL +
+           'Haga clic derecho y seleccione "Ejecutar como administrador".',
+           mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
+
+  // Run full capability check
+  if not CheckSystemRequirements then begin
+    Result := False;
+    Exit;
+  end;
+end;
 
 procedure InitializeWizard;
 begin
   InstallationSuccessful := False;
-end;
-
-function InitializeSetup(): Boolean;
-begin
-  Result := True;
-  
-  // Check for admin rights
-  if not IsAdminLoggedOn then
-  begin
-    MsgBox('Este instalador requiere privilegios de administrador.' + #13#10 + 
-           'Por favor, ejecute como administrador.', mbError, MB_OK);
-    Result := False;
-    exit;
-  end;
-  
-  // Check Windows version
-  if (GetWindowsVersion < $0A000000) then
-  begin
-    MsgBox('Este software requiere Windows 10 (build 19041) o superior.', mbError, MB_OK);
-    Result := False;
-  end;
+  CreateModelSelectionPage;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  // Write model config BEFORE the [Run] section executes
+  if CurStep = ssInstall then
+    WriteModelConfig;
+
   if CurStep = ssPostInstall then
-  begin
     InstallationSuccessful := True;
-  end;
+
+  // Auto-launch server when installation is fully done (Finish page is shown)
+  if CurStep = ssDone then
+    LaunchServer;
 end;
