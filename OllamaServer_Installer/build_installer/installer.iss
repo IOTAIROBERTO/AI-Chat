@@ -63,7 +63,7 @@ Source: "MIGRATION_FROM_LLAMA.md"; DestDir: "{app}"; Flags: ignoreversion skipif
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; Logo and icons
-Source: "server\logo.png"; DestDir: "{app}\server"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "payload\server\logo.png"; DestDir: "{app}\server"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "logo.ico"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "logo.png"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
@@ -170,15 +170,15 @@ begin
     HasCritical := True;
   end;
 
-  // Disk space (need at least 20 GB free)
+  // Disk space (need at least 8 GB free for base install)
   GetSpaceOnDisk(ExpandConstant('{autopf}'), True, FreeMB, TotalMB);
-  if FreeMB < 20480 then begin
+  if FreeMB < 8192 then begin
     Msg := Msg + '[FAIL] Disk Space: ' + IntToStr(FreeMB div 1024) +
-           ' GB free  (20 GB required)' + NL;
+           ' GB free  (8 GB required)' + NL;
     HasCritical := True;
-  end else if FreeMB < 30720 then begin
+  end else if FreeMB < 12288 then begin
     Msg := Msg + '[WARN] Disk Space: ' + IntToStr(FreeMB div 1024) +
-           ' GB free  (30 GB recommended for multiple models)' + NL;
+           ' GB free  (12 GB recommended for optional models)' + NL;
     HasWarning := True;
   end else
     Msg := Msg + '[OK]   Disk Space: ' + IntToStr(FreeMB div 1024) + ' GB free' + NL;
@@ -187,11 +187,11 @@ begin
   RamGB := GetRAMGB;
   if RamGB < 4 then begin
     Msg := Msg + '[FAIL] RAM: ' + IntToStr(RamGB) +
-           ' GB detected  (8 GB required)' + NL;
+           ' GB detected  (4 GB required)' + NL;
     HasCritical := True;
-  end else if RamGB < 8 then begin
+  end else if RamGB < 6 then begin
     Msg := Msg + '[WARN] RAM: ' + IntToStr(RamGB) +
-           ' GB  (8 GB recommended, may run slowly)' + NL;
+           ' GB  (6 GB recommended, may run slowly)' + NL;
     HasWarning := True;
   end else
     Msg := Msg + '[OK]   RAM: ' + IntToStr(RamGB) + ' GB' + NL;
@@ -261,10 +261,10 @@ begin
   ChkModel7b.Parent := ModelPage.Surface;
 
   ChkModel3b := TNewCheckBox.Create(ModelPage);
-  ChkModel3b.Caption := 'phi4-mini    2.5 GB    Microsoft - Excepcional para Q&A documentos';
+  ChkModel3b.Caption := 'phi4-mini    2.5 GB    Microsoft - DEFAULT Q&A model (recommended)';
   ChkModel3b.Top := 100;
   ChkModel3b.Width := 460;
-  ChkModel3b.Checked := False;
+  ChkModel3b.Checked := True;
   ChkModel3b.Parent := ModelPage.Surface;
 
   ChkModel1b := TNewCheckBox.Create(ModelPage);
@@ -277,7 +277,7 @@ begin
   LblNote := TNewStaticText.Create(ModelPage);
   LblNote.Caption :=
     'qwen3:1.7b (1.0 GB) is always downloaded — it is the required base model.' + NL +
-    'Extra models above are optional. You can download them later from the launcher.';
+    'phi4-mini is the default Q&A model (recommended). You can uncheck it to save 2.5 GB.';
   LblNote.Top := 165;
   LblNote.Width := 460;
   LblNote.Parent := ModelPage.Surface;

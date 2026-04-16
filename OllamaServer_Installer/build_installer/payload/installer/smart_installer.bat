@@ -176,7 +176,26 @@ if %ERRORLEVEL% neq 0 (
     echo [WARN] pip upgrade failed - continuing with current version
 )
 
-echo [INFO] Installing packages from requirements.txt...
+:: faster-whisper pins av<13 in its metadata, but av<13 has no Python 3.13 wheel.
+:: Fix: install av>=13 first, then install faster-whisper bypassing its av constraint.
+echo [INFO] Installing av (Python 3.13 compatible wheel)...
+"%PYTHON_CMD%" -m pip install "av>=13.0.0" --quiet 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to install av. Check internet connection.
+    exit /b 30
+)
+
+echo [INFO] Installing faster-whisper (no-deps to keep av>=13)...
+"%PYTHON_CMD%" -m pip install "faster-whisper==1.1.1" --no-deps --quiet 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to install faster-whisper.
+    exit /b 30
+)
+
+echo [INFO] Installing faster-whisper runtime deps...
+"%PYTHON_CMD%" -m pip install "ctranslate2>=4.0,<5" "huggingface_hub>=0.13" "tokenizers" --quiet 2>&1
+
+echo [INFO] Installing remaining packages from requirements.txt...
 "%PYTHON_CMD%" -m pip install -r "%REQUIREMENTS_FILE%" --quiet 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [WARN] First attempt failed. Retrying without cache...
@@ -337,10 +356,16 @@ if exist "%MODELS_CFG%" (
 echo [PHASE 7/9] Determining optimal default model...
 set "DEFAULT_MODEL=%BASE_MODEL%"
 
-:: Prefer highest quality installed model as the default (priority order)
-for %%m in ("qwen3:4b" "phi4-mini" "qwen3:8b" "gemma3:4b") do (
-    "%OLLAMA_CMD%" list 2>nul | findstr /l %%m >nul 2>&1
-    if !ERRORLEVEL! equ 0 set "DEFAULT_MODEL=%%~m"
+:: phi4-mini is the preferred default Q&A model — check it first
+:: If not installed, fall back by quality order (last found wins)
+"%OLLAMA_CMD%" list 2>nul | findstr /l "phi4-mini" >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    set "DEFAULT_MODEL=phi4-mini"
+) else (
+    for %%m in ("qwen3:4b" "qwen3:8b" "gemma3:4b") do (
+        "%OLLAMA_CMD%" list 2>nul | findstr /l %%m >nul 2>&1
+        if !ERRORLEVEL! equ 0 set "DEFAULT_MODEL=%%~m"
+    )
 )
 
 echo [OK] Default model set to: %DEFAULT_MODEL%

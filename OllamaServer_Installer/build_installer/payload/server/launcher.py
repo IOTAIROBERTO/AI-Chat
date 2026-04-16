@@ -29,9 +29,9 @@ RECOMMENDED_MODELS = {
         'quality': '⭐⭐⭐⭐⭐',
         'spanish': '99% nativo',
         'english': '99% native',
-        'description': '🔥 DEFAULT - Rápido y bilingüe',
+        'description': '⚡ Más rápido - Ideal para consultas rápidas',
         'recommended': True,
-        'category': 'Default'
+        'category': 'Recomendado'
     },
     # === TIER 2: RECOMENDADOS ===
     'qwen3:4b': {
@@ -50,9 +50,9 @@ RECOMMENDED_MODELS = {
         'quality': '⭐⭐⭐⭐⭐',
         'spanish': '97% nativo',
         'english': '99% native',
-        'description': '🔬 Microsoft - Excepcional para Q&A documentos',
+        'description': '🔥 DEFAULT - Microsoft · Excepcional para Q&A documentos',
         'recommended': True,
-        'category': 'Recomendado'
+        'category': 'Default'
     },
     # === TIER 3: PREMIUM ===
     'qwen3:8b': {
@@ -161,13 +161,13 @@ class ServerLauncher:
             if self.config_file.exists():
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.current_model = config.get('current_model', 'qwen3:1.7b')
+                    self.current_model = config.get('current_model', 'phi4-mini')
                     self.server_port = config.get('port', 5000)
             else:
-                self.current_model = 'qwen3:1.7b'
+                self.current_model = 'phi4-mini'
                 self.server_port = 5000
         except:
-            self.current_model = 'qwen3:1.7b'
+            self.current_model = 'phi4-mini'
             self.server_port = 5000
     
     def save_config(self):
@@ -888,22 +888,18 @@ class ServerLauncher:
         
         info_text += "\n\n" + "=" * 70 + "\n"
         info_text += "💡 RECOMMENDATIONS:\n\n"
-        info_text += "🥇 BEST DEFAULT: qwen3:1.7b\n"
-        info_text += "   • Fastest bilingual model\n"
-        info_text += "   • Native Spanish & English\n"
-        info_text += "   • Replaces llama3.2:3b (2x faster)\n\n"
-        
-        info_text += "🥈 BEST QUALITY: qwen2.5:3b\n"
+        info_text += "🥇 DEFAULT Q&A MODEL: phi4-mini\n"
+        info_text += "   • Microsoft model — exceptional for document Q&A\n"
+        info_text += "   • Best accuracy for RAG on technical manuals\n"
+        info_text += "   • Native bilingual ES/EN\n\n"
+
+        info_text += "🥈 BEST QUALITY RAG: qwen3:4b\n"
         info_text += "   • Maximum accuracy\n"
-        info_text += "   • Technical manuals\n\n"
-        
-        info_text += "🥉 FASTEST: llama3.2:1b\n"
-        info_text += "   • Ultra-fast responses\n"
-        info_text += "   • Simple queries\n\n"
-        
-        info_text += "📦 LEGACY: llama3.2:3b\n"
-        info_text += "   • Your current model\n"
-        info_text += "   • Keep as backup\n"
+        info_text += "   • Ideal for complex technical queries\n\n"
+
+        info_text += "🥉 FASTEST: qwen3:1.7b\n"
+        info_text += "   • Fastest bilingual model (1.1 GB)\n"
+        info_text += "   • Great for quick, simple queries\n"
         
         text_widget.insert('1.0', info_text)
         text_widget.config(state='disabled')

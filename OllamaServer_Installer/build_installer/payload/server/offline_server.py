@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 VR Manual Server - Bilingual Edition (Spanish/English)
-Version: 4.1 - Multi-model with llama3.2:3b legacy support
+Version: 5.0 - phi4-mini default, smart SSL, auto-model fallback
 """
 
 import sys
@@ -60,7 +60,7 @@ WHISPER_MODEL_SIZE = "medium"         # medium=769M — best Spanish accuracy (p
 WHISPER_LANGUAGE = None               # None = auto-detect (Spanish primary, English secondary)
 WHISPER_DEVICE = "auto"              # auto = CUDA if available, else CPU
 WHISPER_COMPUTE_TYPE = "auto"         # auto = float16 on GPU, int8 on CPU
-DEFAULT_OLLAMA_MODEL = "qwen3:1.7b"   # Qwen3: 99% Spanish native, 99% English native
+DEFAULT_OLLAMA_MODEL = "phi4-mini"    # phi4-mini: exceptional document Q&A, bilingual ES/EN
 USE_SSL = True                        # HTTPS required for Meta Quest WebXR
 SERVER_PORT = 5000
 CHUNK_SIZE = 1000
@@ -499,8 +499,8 @@ def initialize_components():
         if current_ollama_model not in models:
             log_message(f"Configured model '{current_ollama_model}' not found", "WARN")
             
-            # Prefer best available in priority order
-            preferred = ["qwen3:4b", "qwen3:1.7b", "phi4-mini", "qwen3:8b",
+            # Prefer best available in priority order (phi4-mini = default Q&A model)
+            preferred = ["phi4-mini", "qwen3:4b", "qwen3:1.7b", "qwen3:8b",
                          "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b"]
             found = next((m for m in preferred if m in models), None)
             if found:
@@ -1270,7 +1270,7 @@ if __name__ == '__main__':
     log_message("Bilingual Edition Features:")
     log_message("- Spanish/English native support")
     log_message("- Multi-model hot-swapping")
-    log_message("- Default: qwen2.5:1.5b (legacy: llama3.2:3b)")
+    log_message("- Default: phi4-mini (exceptional document Q&A)")
     log_message("- Voice query with language detection")
     
     if initialize_components():
@@ -1327,46 +1327,3 @@ def update_config_port(port):
     except Exception as e:
         log_message(f"Error updating config port: {e}", "WARN")
 
-# ============================================================================
-# MAIN ENTRY POINT
-# ============================================================================
-
-if __name__ == '__main__':
-    print_banner()
-    
-    # Initialize components
-    if not initialize_components():
-        log_message("Failed to initialize components. Exiting.", "ERROR")
-        sys.exit(1)
-    
-    # Find available port
-    port = find_available_port(SERVER_PORT, SERVER_PORT + 10)
-    if not port:
-        log_message(f"No ports available between {SERVER_PORT} and {SERVER_PORT + 10}", "ERROR")
-        sys.exit(1)
-        
-    log_message(f"Starting server on port {port}...")
-    update_config_port(port)
-    
-    # Generate SSL certs
-    if ensure_ssl_certificates():
-        context = ('server.crt', 'server.key')
-        protocol = "HTTPS"
-    else:
-        context = None
-        protocol = "HTTP"
-        
-    log_message(f"Server running at {protocol}://localhost:{port}")
-    log_message("Press Ctrl+C to stop")
-    
-    try:
-        app.run(
-            host='0.0.0.0',
-            port=port,
-            ssl_context=context,
-            threaded=True,
-            use_reloader=False
-        )
-    except Exception as e:
-        log_message(f"Server crashed: {e}", "ERROR")
-        sys.exit(1)

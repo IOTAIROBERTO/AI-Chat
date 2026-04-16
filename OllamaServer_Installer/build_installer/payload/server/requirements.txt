@@ -1,6 +1,6 @@
 # ============================================================================
 # TRAINING AI SERVER - Python Dependencies
-# Version: 3.1.1 - Optimized for Python 3.13 with precompiled wheels
+# Version: 3.1.2 - Fixed av wheel for Python 3.13
 # ============================================================================
 
 # Core Web Framework
@@ -13,8 +13,9 @@ ollama==0.4.4
 # Vector Database (with precompiled wheels)
 chromadb==0.5.23
 
-# Speech Recognition (optimized version)
-faster-whisper==1.0.3
+# Speech Recognition
+# NOTE: faster-whisper is installed separately in smart_installer.bat
+# to work around the av<13 wheel issue on Python 3.13 (see Phase 3)
 
 # Document Processing
 PyPDF2==3.0.1
@@ -22,7 +23,7 @@ PyPDF2==3.0.1
 # Utilities
 colorama==0.4.6
 requests==2.32.3
-cryptography==45.0.0
+cryptography>=45.0.1
 
 # ============================================================================
 # DEPENDENCY NOTES:
