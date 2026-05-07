@@ -6,7 +6,7 @@
 #define MyAppVersion "5.0"
 #define MyAppPublisher "VR Training Solutions"
 #define MyAppURL "https://www.example.com"
-#define MyAppExeName "start_server.bat"
+#define MyAppExeName "launch_server.bat"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -56,6 +56,7 @@ Source: "payload\utils\diagnose_connection.bat"; DestDir: "{app}\installer"; Fla
 
 ; Launcher scripts
 Source: "payload\start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "payload\launch_server.bat"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Documentation
 Source: "README_BILINGUAL.md"; DestDir: "{app}"; DestName: "README.md"; Flags: ignoreversion skipifsourcedoesntexist
@@ -76,15 +77,18 @@ Name: "{localappdata}\{#MyAppName}"; Permissions: users-modify
 Name: "{localappdata}\{#MyAppName}\chroma_db"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment: "Launch VR Training AI Server"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\logo.ico"; Comment: "Launch VR Training AI Server"
 Name: "{group}\README"; Filename: "{app}\README.md"; Comment: "User Guide (Bilingual)"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "Launch VR Training AI Server"
+; Desktop icon: always created (not optional)
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\logo.ico"; Comment: "Launch VR Training AI Server"
+; Per-user desktop fallback (Tasks: desktopicon checkbox still works for extra copies)
+Name: "{autodesktop}\{#MyAppName} (user)"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\logo.ico"; Tasks: desktopicon; Comment: "Launch VR Training AI Server"
 
 [Run]
 ; Silent installation - no CMD window shown, all output goes to log file
 Filename: "{app}\installer\smart_installer.bat"; \
-  Parameters: """{app}"" ""{app}\logs\setup.log"" ""{tmp}\install_models.cfg"""; \
+  Parameters: """{app}"" ""{app}\logs\setup.log"""; \
   StatusMsg: "Installing AI components - this takes 15-30 min, please wait..."; \
   Flags: runhidden waituntilterminated
 
@@ -114,10 +118,6 @@ const
   NL = #13#10;
 
 var
-  ModelPage: TWizardPage;
-  ChkModel7b: TNewCheckBox;
-  ChkModel3b: TNewCheckBox;
-  ChkModel1b: TNewCheckBox;
   InstallationSuccessful: Boolean;
 
 // ============================================================================
@@ -220,84 +220,6 @@ begin
 end;
 
 // ============================================================================
-// MODEL SELECTION PAGE
-// ============================================================================
-
-procedure CreateModelSelectionPage;
-var
-  LblSection, LblBase, LblNote: TNewStaticText;
-begin
-  ModelPage := CreateCustomPage(wpReady,
-    'Select AI Models to Install / Seleccionar Modelos de IA',
-    'qwen3:1.7b is always installed automatically. Select extra models below (optional).');
-
-  // Base model (always installed)
-  LblSection := TNewStaticText.Create(ModelPage);
-  LblSection.Caption := 'Base model (always installed / siempre instalado):';
-  LblSection.Top := 0;
-  LblSection.Width := 460;
-  LblSection.Font.Style := [fsBold];
-  LblSection.Parent := ModelPage.Surface;
-
-  LblBase := TNewStaticText.Create(ModelPage);
-  LblBase.Caption := '   [v] qwen3:1.7b    1.0 GB    Fast & bilingual ES/EN';
-  LblBase.Top := 22;
-  LblBase.Width := 460;
-  LblBase.Parent := ModelPage.Surface;
-
-  // Section divider
-  LblSection := TNewStaticText.Create(ModelPage);
-  LblSection.Caption := 'Optional models (select to download / seleccionar para descargar):';
-  LblSection.Top := 52;
-  LblSection.Width := 460;
-  LblSection.Font.Style := [fsBold];
-  LblSection.Parent := ModelPage.Surface;
-
-  ChkModel7b := TNewCheckBox.Create(ModelPage);
-  ChkModel7b.Caption := 'qwen3:4b    2.6 GB    Mejor calidad para RAG bilingue  [Recomendado]';
-  ChkModel7b.Top := 74;
-  ChkModel7b.Width := 460;
-  ChkModel7b.Checked := False;
-  ChkModel7b.Parent := ModelPage.Surface;
-
-  ChkModel3b := TNewCheckBox.Create(ModelPage);
-  ChkModel3b.Caption := 'phi4-mini    2.5 GB    Microsoft - DEFAULT Q&A model (recommended)';
-  ChkModel3b.Top := 100;
-  ChkModel3b.Width := 460;
-  ChkModel3b.Checked := True;
-  ChkModel3b.Parent := ModelPage.Surface;
-
-  ChkModel1b := TNewCheckBox.Create(ModelPage);
-  ChkModel1b.Caption := 'qwen3:8b    5.2 GB    Premium - Solo PC con 8 GB+ RAM';
-  ChkModel1b.Top := 126;
-  ChkModel1b.Width := 460;
-  ChkModel1b.Checked := False;
-  ChkModel1b.Parent := ModelPage.Surface;
-
-  LblNote := TNewStaticText.Create(ModelPage);
-  LblNote.Caption :=
-    'qwen3:1.7b (1.0 GB) is always downloaded — it is the required base model.' + NL +
-    'phi4-mini is the default Q&A model (recommended). You can uncheck it to save 2.5 GB.';
-  LblNote.Top := 165;
-  LblNote.Width := 460;
-  LblNote.Parent := ModelPage.Surface;
-end;
-
-procedure WriteModelConfig;
-var
-  ConfigFile, Models: String;
-begin
-  // Write selected models to temp file - one per line
-  // First line is always the base model (qwen3:1.7b)
-  ConfigFile := ExpandConstant('{tmp}\install_models.cfg');
-  Models := 'qwen3:1.7b';
-  if ChkModel7b.Checked then Models := Models + NL + 'qwen3:4b';
-  if ChkModel3b.Checked then Models := Models + NL + 'phi4-mini';
-  if ChkModel1b.Checked then Models := Models + NL + 'qwen3:8b';
-  SaveStringToFile(ConfigFile, Models, False);
-end;
-
-// ============================================================================
 // SERVER AUTO-LAUNCH
 // ============================================================================
 
@@ -371,15 +293,10 @@ end;
 procedure InitializeWizard;
 begin
   InstallationSuccessful := False;
-  CreateModelSelectionPage;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  // Write model config BEFORE the [Run] section executes
-  if CurStep = ssInstall then
-    WriteModelConfig;
-
   if CurStep = ssPostInstall then
     InstallationSuccessful := True;
 

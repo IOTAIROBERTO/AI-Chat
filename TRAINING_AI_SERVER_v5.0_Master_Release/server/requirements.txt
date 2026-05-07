@@ -1,0 +1,35 @@
+# ============================================================================
+# TRAINING AI SERVER - Python Dependencies
+# Version: 3.1.2 - Fixed av wheel for Python 3.13
+# ============================================================================
+
+# Core Web Framework
+flask==3.1.0
+flask-cors==5.0.0
+
+# AI/LLM Integration
+ollama==0.4.4
+
+# Vector Database (with precompiled wheels)
+chromadb==0.5.23
+
+# Speech Recognition
+# NOTE: faster-whisper is installed separately in smart_installer.bat
+# to work around the av<13 wheel issue on Python 3.13 (see Phase 3)
+
+# Document Processing
+PyPDF2==3.0.1
+
+# Utilities
+colorama==0.4.6
+requests==2.32.3
+cryptography>=45.0.1
+
+# ============================================================================
+# DEPENDENCY NOTES:
+# ============================================================================
+# - All versions selected have precompiled wheels for Windows x64
+# - chromadb 0.5.x includes improved tokenizers with wheels
+# - faster-whisper 1.0.x is more stable and has better wheel support
+# - flask-cors 5.0.0 is compatible with Flask 3.1.x
+# ============================================================================

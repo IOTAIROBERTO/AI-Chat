@@ -1,5 +1,5 @@
 {
-  "current_model": "phi4-mini",
+  "current_model": "qwen3:1.7b",
   "last_updated": "2026-01-20T00:43:26.357382",
   "bilingual_mode": true,
   "supported_languages": [

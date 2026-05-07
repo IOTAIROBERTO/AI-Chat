@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRAINING AI SERVER — Uninstall Guide</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.65; color: #1a1a1a; background: #fff; }
+
+/* ── COVER ── */
+.cover {
+  page-break-after: always; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; min-height: 100vh;
+  background: linear-gradient(145deg, #1a0a0a 0%, #4a1a1a 60%, #991b1b 100%);
+  color: #fff; text-align: center; padding: 60px 40px;
+}
+.badge { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 6px 18px; font-size: 9pt; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 28px; color: #fca5a5; }
+.cover h1 { font-size: 38pt; font-weight: 700; line-height: 1.1; margin-bottom: 10px; }
+.cover h1 span { color: #fca5a5; }
+.cover .sub { font-size: 14pt; color: #fecaca; margin-bottom: 40px; font-weight: 300; }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; width: 100%; margin-bottom: 40px; }
+.meta-box { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 14px; text-align: left; }
+.meta-box .lbl { font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; color: #fca5a5; margin-bottom: 4px; }
+.meta-box .val { font-size: 12pt; font-weight: 600; }
+.foot { font-size: 9pt; color: #9ca3af; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; max-width: 460px; width: 100%; }
+
+/* ── LAYOUT ── */
+.content { max-width: 800px; margin: 0 auto; padding: 36px 44px; }
+.toc-page { page-break-after: always; }
+.toc-title { font-size: 19pt; font-weight: 700; color: #0d1b2a; margin-bottom: 22px; padding-bottom: 10px; border-bottom: 3px solid #dc2626; }
+.toc-grp { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; margin: 18px 0 6px 6px; }
+.toc-section a { display: flex; align-items: baseline; text-decoration: none; color: #1e3a5f; padding: 4px 6px; border-radius: 4px; margin-bottom: 2px; font-size: 10.5pt; }
+.tn { font-size: 9pt; font-weight: 700; color: #dc2626; min-width: 26px; }
+.tl { flex: 1; padding: 0 6px; }
+.td { flex: 1; border-bottom: 1px dotted #94a3b8; margin: 0 6px; position: relative; top: -3px; }
+.tp { font-size: 9pt; color: #64748b; min-width: 18px; text-align: right; }
+
+/* ── SECTION HEADERS ── */
+.section { margin-bottom: 36px; }
+.sec-hdr { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }
+.sec-num { background: #dc2626; color: #fff; font-size: 10pt; font-weight: 700; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+h2 { font-size: 15pt; font-weight: 700; color: #0d1b2a; }
+h3 { font-size: 11pt; font-weight: 700; color: #7f1d1d; margin: 20px 0 8px; padding-left: 10px; border-left: 3px solid #dc2626; }
+h4 { font-size: 10pt; font-weight: 700; color: #334155; margin: 12px 0 6px; }
+p { margin-bottom: 9px; color: #334155; }
+
+/* ── STEP BOX ── */
+.steps { counter-reset: st; }
+.step { display: flex; gap: 16px; margin-bottom: 20px; page-break-inside: avoid; }
+.sn { flex-shrink: 0; width: 32px; height: 32px; background: #7f1d1d; color: #fff; font-weight: 700; font-size: 12pt; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.sb { flex: 1; }
+.sb h4 { margin-top: 0; color: #7f1d1d; font-size: 11pt; }
+
+/* ── VERIFY BOX ── */
+.verify {
+  background: #f0fdf4; border: 1px solid #86efac; border-left: 4px solid #16a34a;
+  border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0 14px;
+  font-size: 10pt; page-break-inside: avoid;
+}
+.verify .vt { font-weight: 700; color: #15803d; margin-bottom: 4px; }
+.verify code { background: #dcfce7; border-color: #86efac; color: #14532d; }
+
+/* ── CALLOUTS ── */
+.note { display: flex; gap: 10px; border-radius: 6px; padding: 11px 14px; margin: 12px 0; font-size: 10pt; page-break-inside: avoid; }
+.ni { font-size: 13pt; flex-shrink: 0; line-height: 1.4; }
+.nb { flex: 1; }
+.nb strong { display: block; margin-bottom: 2px; }
+.info   { background: #eff6ff; border-left: 4px solid #3b82f6; }
+.warn   { background: #fffbeb; border-left: 4px solid #f59e0b; }
+.danger { background: #fef2f2; border-left: 4px solid #ef4444; }
+.ok     { background: #f0fdf4; border-left: 4px solid #22c55e; }
+.tip    { background: #faf5ff; border-left: 4px solid #7c3aed; }
+
+/* ── CODE BLOCKS ── */
+.cmd-bar { display: flex; align-items: center; gap: 7px; background: #1e293b; color: #94a3b8; font-size: 8pt; padding: 5px 14px; border-radius: 6px 6px 0 0; margin-bottom: -2px; font-family: 'Consolas', monospace; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dr { background: #ef4444; } .dy { background: #f59e0b; } .dg { background: #22c55e; }
+.sh { color: #60a5fa; font-weight: 700; font-size: 8pt; margin-left: 4px; }
+pre { background: #0f172a; color: #e2e8f0; border-radius: 0 0 8px 8px; padding: 13px 17px; font-family: 'Consolas', monospace; font-size: 9pt; line-height: 1.8; margin: 0 0 10px; overflow-x: auto; page-break-inside: avoid; }
+pre.alone { border-radius: 8px; margin-top: 8px; }
+.cm { color: #64748b; } .st { color: #86efac; } .hl { color: #7dd3fc; } .rd { color: #fca5a5; }
+code { background: #f1f5f9; color: #1e3a5f; font-family: 'Consolas', monospace; font-size: 9pt; padding: 2px 5px; border-radius: 4px; border: 1px solid #e2e8f0; }
+
+/* ── TABLES ── */
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; page-break-inside: avoid; }
+thead tr { background: #7f1d1d; color: #fff; }
+thead th { padding: 9px 12px; text-align: left; font-size: 9pt; }
+tbody tr:nth-child(even) { background: #f8fafc; }
+td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; color: #334155; vertical-align: top; }
+td code { font-size: 8.5pt; }
+.tag { display: inline-block; font-size: 8pt; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+.yes  { background: #dcfce7; color: #15803d; }
+.no   { background: #f1f5f9; color: #64748b; }
+.gone { background: #fee2e2; color: #991b1b; }
+.kept { background: #fef9c3; color: #854d0e; }
+.opt  { background: #ede9fe; color: #5b21b6; }
+
+/* ── CHECKLIST ── */
+.chk { list-style: none; padding: 0; }
+.chk li { padding: 5px 0 5px 26px; position: relative; font-size: 10.5pt; color: #334155; border-bottom: 1px solid #f1f5f9; }
+.chk li:last-child { border-bottom: none; }
+.chk li::before { content: "☐"; position: absolute; left: 0; color: #dc2626; font-size: 13pt; line-height: 1.2; }
+
+/* ── METHOD BOX ── */
+.method { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+.method-hdr { padding: 12px 18px; font-weight: 700; font-size: 11pt; display: flex; align-items: center; gap: 10px; }
+.method-a .method-hdr { background: #dbeafe; color: #1e40af; border-bottom: 1px solid #bfdbfe; }
+.method-b .method-hdr { background: #fef3c7; color: #92400e; border-bottom: 1px solid #fde68a; }
+.method-body { padding: 14px 18px; }
+
+/* ── ERROR CARDS ── */
+.err-card { border: 1px solid #fca5a5; border-radius: 8px; margin-bottom: 18px; overflow: hidden; page-break-inside: avoid; }
+.err-hdr { background: #fef2f2; padding: 11px 16px; border-bottom: 1px solid #fca5a5; display: flex; align-items: center; gap: 9px; }
+.err-hdr strong { font-size: 10.5pt; color: #991b1b; }
+.err-body { padding: 13px 16px; }
+.err-body p { margin-bottom: 8px; }
+
+/* ── FAQ ── */
+.faq { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px; overflow: hidden; page-break-inside: avoid; }
+.faq-q { background: #f8fafc; padding: 12px 16px; font-weight: 700; font-size: 10.5pt; color: #1e3a5f; border-bottom: 1px solid #e2e8f0; display: flex; gap: 9px; }
+.fq { color: #dc2626; font-size: 12pt; flex-shrink: 0; }
+.faq-a { padding: 12px 16px; font-size: 10pt; color: #334155; line-height: 1.7; }
+.faq-a p { margin-bottom: 7px; }
+.faq-a p:last-child { margin-bottom: 0; }
+
+/* ── MISC ── */
+hr.div { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
+.pb { page-break-before: always; }
+.small { font-size: 9pt; color: #64748b; }
+
+@media print {
+  body { padding: 0; }
+  .content { padding: 18px 30px; max-width: 100%; }
+  .cover { min-height: 100vh; }
+  pre { font-size: 8.5pt; }
+  table { font-size: 9pt; }
+  a { color: inherit !important; text-decoration: none; }
+}
+@page { size: A4; margin: 18mm 15mm 18mm 15mm; }
+@page :first { margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- ══ COVER ══ -->
+<div class="cover">
+  <div class="badge">Technical Documentation · v5.0</div>
+  <h1>TRAINING AI<br><span>SERVER</span></h1>
+  <div class="sub">Complete Uninstall Guide</div>
+  <div class="meta-grid">
+    <div class="meta-box"><div class="lbl">Platform</div><div class="val">Windows 10 / 11 x64</div></div>
+    <div class="meta-box"><div class="lbl">Method</div><div class="val">Command Line</div></div>
+    <div class="meta-box"><div class="lbl">Time</div><div class="val">5 – 15 minutes</div></div>
+    <div class="meta-box"><div class="lbl">Privileges</div><div class="val">Administrator</div></div>
+  </div>
+  <div class="foot">VR Training Solutions &nbsp;·&nbsp; Bilingual Edition (Spanish / English)<br>RAG · Whisper STT · ChromaDB · Ollama LLM</div>
+</div>
+
+<!-- ══ TABLE OF CONTENTS ══ -->
+<div class="content toc-page">
+  <div class="toc-title">Table of Contents</div>
+
+  <div class="toc-grp">Before you uninstall</div>
+  <div class="toc-section"><a href="#s1"><span class="tn">01</span><span class="tl">What gets removed — full inventory</span><span class="td"></span><span class="tp">3</span></a></div>
+  <div class="toc-section"><a href="#s2"><span class="tn">02</span><span class="tl">Back up what you want to keep</span><span class="td"></span><span class="tp">3</span></a></div>
+
+  <div class="toc-grp">Uninstall steps (step by step)</div>
+  <div class="toc-section"><a href="#s4"><span class="tn">03</span><span class="tl">Step 1 · Stop all running processes</span><span class="td"></span><span class="tp">4</span></a></div>
+  <div class="toc-section"><a href="#s5"><span class="tn">05</span><span class="tl">Step 2 · Remove Ollama AI models</span><span class="td"></span><span class="tp">5</span></a></div>
+  <div class="toc-section"><a href="#s6"><span class="tn">06</span><span class="tl">Step 3 · Delete application files</span><span class="td"></span><span class="tp">6</span></a></div>
+  <div class="toc-section"><a href="#s7"><span class="tn">07</span><span class="tl">Step 4 · Delete user data &amp; vector database</span><span class="td"></span><span class="tp">7</span></a></div>
+  <div class="toc-section"><a href="#s8"><span class="tn">08</span><span class="tl">Step 5 · Remove shortcuts &amp; Start Menu</span><span class="td"></span><span class="tp">8</span></a></div>
+  <div class="toc-section"><a href="#s9"><span class="tn">09</span><span class="tl">Step 6 · Remove firewall rules</span><span class="td"></span><span class="tp">8</span></a></div>
+  <div class="toc-section"><a href="#s10"><span class="tn">10</span><span class="tl">Step 7 · Remove registry entries</span><span class="td"></span><span class="tp">9</span></a></div>
+  <div class="toc-section"><a href="#s11"><span class="tn">11</span><span class="tl">Step 8 · Uninstall Ollama (optional)</span><span class="td"></span><span class="tp">9</span></a></div>
+  <div class="toc-section"><a href="#s12"><span class="tn">12</span><span class="tl">Step 9 · Uninstall Python (optional)</span><span class="td"></span><span class="tp">10</span></a></div>
+
+  <div class="toc-grp">After removal</div>
+  <div class="toc-section"><a href="#s13"><span class="tn">13</span><span class="tl">Verify complete removal</span><span class="td"></span><span class="tp">11</span></a></div>
+
+  <div class="toc-grp">FAQ</div>
+  <div class="toc-section"><a href="#s14"><span class="tn">14</span><span class="tl">Frequently asked questions</span><span class="td"></span><span class="tp">12</span></a></div>
+</div>
+
+<!-- ══════════════════════════════════
+     CONTENT
+══════════════════════════════════ -->
+<div class="content">
+
+<!-- ─── 01 WHAT GETS REMOVED ─── -->
+<div class="section" id="s1">
+  <div class="sec-hdr"><div class="sec-num">01</div><h2>What gets removed — full inventory</h2></div>
+
+  <p>The table below lists every component installed by the server and where it lives on disk or in the registry.</p>
+
+  <div class="note danger">
+    <div class="ni">🗑️</div>
+    <div class="nb"><strong>This cannot be undone.</strong> Once removed, all indexed documents and the vector database are gone permanently. Back up any PDFs you care about before proceeding (see Section 02).</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Component</th><th>Location</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Application files (server, launcher, scripts)</td>
+        <td><code>%ProgramFiles%\TRAINING AI SERVER\</code></td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>ChromaDB vector database (all indexed chunks)</td>
+        <td><code>%LOCALAPPDATA%\TRAINING AI SERVER\chroma_db\</code></td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>Server configuration file</td>
+        <td><code>%ProgramFiles%\TRAINING AI SERVER\server\server_config.json</code></td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>Installation logs</td>
+        <td><code>%ProgramFiles%\TRAINING AI SERVER\logs\</code></td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>Desktop &amp; Start Menu shortcuts</td>
+        <td><code>%USERPROFILE%\Desktop\</code> and Start Menu</td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>Firewall rules (inbound/outbound port 5000)</td>
+        <td>Windows Defender Firewall</td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>Registry entries</td>
+        <td><code>HKLM\SOFTWARE\VR Training AI Server</code></td>
+        <td><span class="tag gone">Removed</span></td>
+      </tr>
+      <tr>
+        <td>Ollama AI models (qwen3:1.7b, phi4-mini, etc.)</td>
+        <td><code>%USERPROFILE%\.ollama\</code></td>
+        <td><span class="tag opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td>Ollama application</td>
+        <td>System PATH / Program Files</td>
+        <td><span class="tag opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td>Python 3.x</td>
+        <td><code>%LOCALAPPDATA%\Programs\Python\</code></td>
+        <td><span class="tag opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td>Your PDF source files</td>
+        <td>Wherever you stored them originally</td>
+        <td><span class="tag kept">Not touched</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="div">
+
+<!-- ─── 02 BACKUP ─── -->
+<div class="section" id="s2">
+  <div class="sec-hdr"><div class="sec-num">02</div><h2>Back up what you want to keep</h2></div>
+
+  <p>The uninstaller removes the ChromaDB database and all configuration. If you plan to reinstall later, back up these items first:</p>
+
+  <h3>Option A — Back up the vector database (saves re-indexing time)</h3>
+  <p>The ChromaDB folder contains all indexed document chunks. Copying it means you will not need to re-index PDFs after reinstalling.</p>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># Copy the ChromaDB to a safe location (e.g. your Desktop)</span>
+xcopy "%LOCALAPPDATA%\TRAINING AI SERVER\chroma_db" "%USERPROFILE%\Desktop\chroma_db_backup" /E /I /H /Y</pre>
+
+  <h3>Option B — Note which PDFs are indexed</h3>
+  <p>Open the launcher and take a screenshot of the <em>Indexed Manuals</em> list, or run this command to see the indexed document names logged by the server:</p>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+  <pre class="alone">type "%ProgramFiles%\TRAINING AI SERVER\logs\install.log" | findstr /i "index"</pre>
+
+  <div class="note info">
+    <div class="ni">💡</div>
+    <div class="nb"><strong>Your original PDF files are never deleted.</strong> The uninstaller only removes the server's indexed copy (the vector database). Your source PDF documents remain wherever you originally stored them.</div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<div class="note info" style="margin-bottom:24px;">
+  <div class="ni">🔐</div>
+  <div class="nb"><strong>Open an Administrator command prompt before starting.</strong><br>Press <code>Win</code>, type <code>cmd</code>, right-click <em>Command Prompt</em>, select <em>Run as administrator</em>.</div>
+</div>
+
+<!-- ─── 04 STEP 1 ─── -->
+<div class="section" id="s4">
+  <div class="sec-hdr"><div class="sec-num">04</div><h2>Step 1 · Stop all running processes</h2></div>
+
+  <p>The server, launcher, and Ollama must be stopped before any files can be deleted. Run these commands to force-stop them all.</p>
+
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># Stop the Python launcher (GUI window)</span>
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq *launcher*" >nul 2>&1
+
+<span class="cm"># Stop the Flask server process</span>
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq *offline_server*" >nul 2>&1
+
+<span class="cm"># Stop the background launcher (no window)</span>
+taskkill /F /IM pythonw.exe >nul 2>&1
+
+<span class="cm"># Stop Ollama</span>
+taskkill /F /IM ollama.exe >nul 2>&1
+
+<span class="cm"># Verify nothing is still running on port 5000</span>
+netstat -ano | findstr :5000</pre>
+
+  <div class="verify">
+    <div class="vt">✅ Verify — no output from the last command means port 5000 is free.</div>
+    <p style="margin-top:6px;">If you still see a line with <code>:5000</code>, note the PID in the last column and run: <code>taskkill /F /PID &lt;PID&gt;</code></p>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 05 STEP 2 ─── -->
+<div class="section" id="s5">
+  <div class="sec-hdr"><div class="sec-num">05</div><h2>Step 2 · Remove Ollama AI models</h2></div>
+
+  <p>Ollama models are large files (1–5 GB each). Remove them to reclaim disk space. This step is optional if you plan to use Ollama with other applications.</p>
+
+  <h3>See what is installed</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+  <pre class="alone">ollama list</pre>
+
+  <h3>Remove specific models</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+  <pre><span class="cm"># Remove each model you no longer need</span>
+ollama rm qwen3:1.7b
+ollama rm phi4-mini
+ollama rm qwen3:4b
+ollama rm qwen3:8b</pre>
+
+  <h3>Remove all models at once (PowerShell)</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">PowerShell — Administrator</span></div>
+  <pre>ollama list | Select-Object -Skip 1 | ForEach-Object {
+    $model = ($_ -split '\s+')[0]
+    if ($model) { ollama rm $model }
+}</pre>
+
+  <div class="verify">
+    <div class="vt">✅ Verify — run <code>ollama list</code> again. Output should be empty (only the header row).</div>
+  </div>
+
+  <div class="note tip">
+    <div class="ni">💡</div>
+    <div class="nb"><strong>Models are stored in <code>%USERPROFILE%\.ollama\models\</code></strong><br>If <code>ollama rm</code> fails (Ollama not in PATH), you can delete that folder directly using File Explorer.</div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 06 STEP 3 ─── -->
+<div class="section" id="s6">
+  <div class="sec-hdr"><div class="sec-num">06</div><h2>Step 3 · Delete application files</h2></div>
+
+  <p>This removes the main installation folder — server Python files, launcher, installer scripts, SSL certificates, and logs.</p>
+
+  <h3>Standard installation path</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># Remove the main installation directory</span>
+rd /s /q "%ProgramFiles%\TRAINING AI SERVER"
+
+<span class="cm"># Also remove the local app data subfolder</span>
+rd /s /q "%LOCALAPPDATA%\TRAINING AI SERVER"</pre>
+
+  <div class="verify">
+    <div class="vt">✅ Verify — both folders should be gone:</div>
+    <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+    <pre class="alone">if exist "%ProgramFiles%\TRAINING AI SERVER" (echo STILL EXISTS) else (echo OK - deleted)
+if exist "%LOCALAPPDATA%\TRAINING AI SERVER" (echo STILL EXISTS) else (echo OK - deleted)</pre>
+  </div>
+
+  <h3>If deletion fails (files locked)</h3>
+  <p>A file may be held open by Windows Defender or another process. Use <code>takeown</code> to force deletion:</p>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre>takeown /f "%ProgramFiles%\TRAINING AI SERVER" /r /d y
+icacls "%ProgramFiles%\TRAINING AI SERVER" /grant administrators:F /t
+rd /s /q "%ProgramFiles%\TRAINING AI SERVER"</pre>
+
+  <div class="note warn">
+    <div class="ni">⚠️</div>
+    <div class="nb"><strong>If the folder still cannot be deleted</strong> — reboot and try again. Alternatively, use Task Manager to find and close any process with that path open.</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 07 STEP 4 ─── -->
+<div class="section" id="s7">
+  <div class="sec-hdr"><div class="sec-num">07</div><h2>Step 4 · Delete user data &amp; vector database</h2></div>
+
+  <p>The ChromaDB vector database and Ollama model data live separately from the application folder. Delete these to fully reclaim disk space.</p>
+
+  <div class="note danger">
+    <div class="ni">⚠️</div>
+    <div class="nb"><strong>The ChromaDB folder contains all your indexed documents.</strong> Once deleted, every PDF will need to be re-indexed after reinstalling. Back it up first if needed (Section 02).</div>
+  </div>
+
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># ChromaDB — the vector database (all indexed document chunks)</span>
+rd /s /q "%LOCALAPPDATA%\TRAINING AI SERVER\chroma_db" 2>nul
+
+<span class="cm"># Ollama model files (large — 1–5 GB per model)</span>
+rd /s /q "%USERPROFILE%\.ollama" 2>nul
+
+<span class="cm"># App data folder (any remaining config or temp files)</span>
+rd /s /q "%APPDATA%\VR Training AI Server" 2>nul
+rd /s /q "%LOCALAPPDATA%\VR Training AI Server" 2>nul</pre>
+
+  <table>
+    <thead><tr><th>Folder</th><th>What it contains</th><th>Size (approx.)</th></tr></thead>
+    <tbody>
+      <tr><td><code>%LOCALAPPDATA%\TRAINING AI SERVER\chroma_db\</code></td><td>All indexed document chunks (vector embeddings)</td><td>Depends on PDFs indexed</td></tr>
+      <tr><td><code>%USERPROFILE%\.ollama\</code></td><td>Ollama models + configuration</td><td>1 GB – 15 GB</td></tr>
+      <tr><td><code>%APPDATA%\VR Training AI Server\</code></td><td>Legacy app data (older installs)</td><td>Small</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="div">
+
+<!-- ─── 08 STEP 5 ─── -->
+<div class="section" id="s8">
+  <div class="sec-hdr"><div class="sec-num">08</div><h2>Step 5 · Remove shortcuts &amp; Start Menu</h2></div>
+
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+  <pre><span class="cm"># Desktop shortcut (current user)</span>
+del /f /q "%USERPROFILE%\Desktop\TRAINING AI SERVER.lnk" 2>nul
+del /f /q "%USERPROFILE%\Desktop\VR Training AI Server.lnk" 2>nul
+
+<span class="cm"># Desktop shortcut (all users)</span>
+del /f /q "%PUBLIC%\Desktop\TRAINING AI SERVER.lnk" 2>nul
+del /f /q "%PUBLIC%\Desktop\VR Training AI Server.lnk" 2>nul
+
+<span class="cm"># Start Menu folder</span>
+rd /s /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\TRAINING AI SERVER" 2>nul
+rd /s /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\VR Training AI Server" 2>nul</pre>
+
+  <div class="verify">
+    <div class="vt">✅ Verify — check the Desktop and Start Menu to confirm shortcuts are gone.</div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 09 STEP 6 ─── -->
+<div class="section" id="s9">
+  <div class="sec-hdr"><div class="sec-num">09</div><h2>Step 6 · Remove firewall rules</h2></div>
+
+  <p>The installer added inbound and outbound firewall rules for port 5000. Remove them so the port is no longer exposed.</p>
+
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># Remove all firewall rule names used by the server</span>
+netsh advfirewall firewall delete rule name="VR Manual Server"      2>nul
+netsh advfirewall firewall delete rule name="VR Manual Server Out"  2>nul
+netsh advfirewall firewall delete rule name="TRAINING AI SERVER"    2>nul
+netsh advfirewall firewall delete rule name="TRAINING AI SERVER In" 2>nul</pre>
+
+  <div class="verify">
+    <div class="vt">✅ Verify — none of these should return results:</div>
+    <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+    <pre class="alone">netsh advfirewall firewall show rule name="VR Manual Server"
+netsh advfirewall firewall show rule name="TRAINING AI SERVER"</pre>
+    <p style="margin-top:6px;">Both commands should print <em>"No rules match the specified criteria"</em>.</p>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 10 STEP 7 ─── -->
+<div class="section" id="s10">
+  <div class="sec-hdr"><div class="sec-num">10</div><h2>Step 7 · Remove registry entries</h2></div>
+
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># Machine-wide application key</span>
+reg delete "HKLM\SOFTWARE\VR Training AI Server" /f 2>nul
+
+<span class="cm"># Uninstall registry key</span>
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\VR Training AI Server" /f 2>nul
+
+<span class="cm"># Per-user key</span>
+reg delete "HKCU\SOFTWARE\VR Training AI Server" /f 2>nul</pre>
+
+  <div class="note info">
+    <div class="ni">💡</div>
+    <div class="nb">The <code>2&gt;nul</code> suffix suppresses "key not found" errors — it is safe to run all lines even if the keys do not exist.</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 11 STEP 8 ─── -->
+<div class="section" id="s11">
+  <div class="sec-hdr"><div class="sec-num">11</div><h2>Step 8 · Uninstall Ollama <span style="font-size:10pt;font-weight:400;color:#64748b;">(optional)</span></h2></div>
+
+  <div class="note warn">
+    <div class="ni">⚠️</div>
+    <div class="nb"><strong>Ollama is shared software.</strong> Only uninstall it if you are certain no other applications on this machine use it. If unsure, skip this step.</div>
+  </div>
+
+  <h3>Method 1 — winget (recommended)</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre class="alone">winget uninstall Ollama.Ollama --silent</pre>
+
+  <h3>Method 2 — Control Panel</h3>
+  <p>Press <code>Win + R</code> → <code>appwiz.cpl</code> → find <strong>Ollama</strong> → Uninstall.</p>
+
+  <h3>Method 3 — Manual removal (if uninstaller is missing)</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># Find where Ollama is installed</span>
+where ollama.exe
+
+<span class="cm"># Delete the Ollama directory (adjust path from above output)</span>
+rd /s /q "%LOCALAPPDATA%\Programs\Ollama"
+
+<span class="cm"># Remove Ollama from PATH (PowerShell)</span>
+[System.Environment]::SetEnvironmentVariable("PATH",
+  [System.Environment]::GetEnvironmentVariable("PATH","User") -replace ";?[^;]*ollama[^;]*","",
+  "User")</pre>
+
+  <div class="verify">
+    <div class="vt">✅ Verify — close and reopen CMD, then:</div>
+    <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD</span></div>
+    <pre class="alone">ollama --version</pre>
+    <p style="margin-top:6px;">Should print <em>"'ollama' is not recognized"</em> if fully removed.</p>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 12 STEP 9 ─── -->
+<div class="section" id="s12">
+  <div class="sec-hdr"><div class="sec-num">12</div><h2>Step 9 · Uninstall Python <span style="font-size:10pt;font-weight:400;color:#64748b;">(optional)</span></h2></div>
+
+  <div class="note warn">
+    <div class="ni">⚠️</div>
+    <div class="nb"><strong>Python is shared.</strong> Many Windows tools, scripts, and IDEs depend on Python. Only uninstall if you are certain nothing else on this machine needs it.</div>
+  </div>
+
+  <h3>Method 1 — Control Panel</h3>
+  <p>Press <code>Win + R</code> → <code>appwiz.cpl</code> → find <strong>Python 3.x</strong> → Uninstall.</p>
+
+  <h3>Method 2 — winget</h3>
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># List installed Python versions</span>
+winget list --name Python
+
+<span class="cm"># Uninstall (adjust version number)</span>
+winget uninstall Python.Python.3.13 --silent</pre>
+
+  <div class="note info">
+    <div class="ni">💡</div>
+    <div class="nb"><strong>Python packages (pip installs) are removed automatically</strong> when Python is uninstalled. You do not need to manually delete the <code>site-packages</code> folder.</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 13 VERIFY ─── -->
+<div class="section" id="s13">
+  <div class="sec-hdr"><div class="sec-num">13</div><h2>Verify complete removal</h2></div>
+
+  <p>Run this checklist after all steps to confirm a clean uninstall.</p>
+
+  <div class="cmd-bar"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div><span class="sh">CMD — Administrator</span></div>
+  <pre><span class="cm"># 1. Application folder gone?</span>
+if exist "%ProgramFiles%\TRAINING AI SERVER" (echo [FAIL] App folder still exists) else (echo [OK]   App folder deleted)
+
+<span class="cm"># 2. Local app data gone?</span>
+if exist "%LOCALAPPDATA%\TRAINING AI SERVER" (echo [FAIL] Local data still exists) else (echo [OK]   Local data deleted)
+
+<span class="cm"># 3. ChromaDB gone?</span>
+if exist "%LOCALAPPDATA%\TRAINING AI SERVER\chroma_db" (echo [FAIL] ChromaDB still exists) else (echo [OK]   ChromaDB deleted)
+
+<span class="cm"># 4. Port 5000 no longer listening?</span>
+netstat -ano | findstr :5000 >nul && echo [FAIL] Port 5000 still in use || echo [OK]   Port 5000 free
+
+<span class="cm"># 5. Firewall rules removed?</span>
+netsh advfirewall firewall show rule name="TRAINING AI SERVER" >nul 2>&1 && echo [FAIL] Firewall rule still exists || echo [OK]   Firewall rules removed
+
+<span class="cm"># 6. Registry key gone?</span>
+reg query "HKLM\SOFTWARE\VR Training AI Server" >nul 2>&1 && echo [FAIL] Registry key still present || echo [OK]   Registry key deleted</pre>
+
+  <p style="margin-top:10px;">All lines should print <code>[OK]</code>. For any <code>[FAIL]</code> line, return to the corresponding step above and repeat.</p>
+
+  <h3>Full disk space recovery check</h3>
+  <table>
+    <thead><tr><th>What was removed</th><th>Typical space recovered</th></tr></thead>
+    <tbody>
+      <tr><td>Application files (server, launcher, logs)</td><td>~50 MB</td></tr>
+      <tr><td>ChromaDB vector database</td><td>10 MB – 2 GB (depends on indexed PDFs)</td></tr>
+      <tr><td>Ollama models (qwen3:1.7b + phi4-mini)</td><td>~3.6 GB</td></tr>
+      <tr><td>Ollama application (optional)</td><td>~200 MB</td></tr>
+      <tr><td>Python + pip packages (optional)</td><td>~500 MB – 1.5 GB</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 14 FAQ ─── -->
+<div class="section" id="s14">
+  <div class="sec-hdr"><div class="sec-num">14</div><h2>Frequently Asked Questions</h2></div>
+
+  <div class="faq">
+    <div class="faq-q"><span class="fq">Q</span>Can I reinstall the server after uninstalling?</div>
+    <div class="faq-a">
+      <p><strong>Yes.</strong> Follow the <em>TRAINING_AI_SERVER_Manual.html</em> installation steps again at any time to reinstall all components from scratch.</p>
+      <p>If you backed up the ChromaDB folder (Section 02), copy it back to <code>%LOCALAPPDATA%\TRAINING AI SERVER\chroma_db\</code> after reinstalling to restore all indexed documents without re-indexing.</p>
+    </div>
+  </div>
+
+  <div class="faq">
+    <div class="faq-q"><span class="fq">Q</span>Can I keep the Ollama models so I don't re-download them?</div>
+    <div class="faq-a">
+      <p><strong>Yes.</strong> Skip Step 2 (Remove Ollama AI models) and Step 8 (Uninstall Ollama). Ollama and its models will remain on your machine.</p>
+      <p>When you reinstall the server, it detects the existing Ollama installation and skips the download steps. The launcher will show the existing models in the <em>Switch to</em> dropdown immediately after reinstall.</p>
+    </div>
+  </div>
+
+  <div class="faq">
+    <div class="faq-q"><span class="fq">Q</span>Some files are still there after the deletion commands — why?</div>
+    <div class="faq-a">
+      <p>A file may be locked by another process — typically Windows Defender scanning the ChromaDB folder, or a Python/Ollama process that didn't fully stop.</p>
+      <p><strong>Fix A:</strong> Reboot the machine and retry the <code>rd</code> command. Most locked files release after reboot.</p>
+      <p><strong>Fix B:</strong> Use the <code>takeown</code> approach documented in Step 3 to force ownership and delete.</p>
+    </div>
+  </div>
+
+  <div class="faq">
+    <div class="faq-q"><span class="fq">Q</span>My PDF files were in the manuals folder — are they gone?</div>
+    <div class="faq-a">
+      <p>The <code>manuals\</code> subfolder inside the installation directory is removed as part of Step 3. <strong>If you stored your original PDFs there, they are gone.</strong></p>
+      <p>The server design expects you to keep your PDFs in a separate location (e.g. your Documents folder) and index them from there. The server only stores the extracted vector chunks in ChromaDB — not the PDFs themselves.</p>
+    </div>
+  </div>
+
+  <div class="faq">
+    <div class="faq-q"><span class="fq">Q</span>I only want to uninstall and reinstall cleanly — what is the minimum I need to do?</div>
+    <div class="faq-a">
+      <p>For a clean reinstall keeping your Ollama models (to avoid re-downloading):</p>
+      <ol style="margin: 8px 0 0 18px; line-height: 2; color: #334155;">
+        <li>Run Steps 1, 3, 4 (skip Ollama models), 5, 6, 7.</li>
+        <li>Skip Steps 2, 8, 9 — keep Ollama and Python.</li>
+        <li>Follow the installation manual again from Step 5.</li>
+      </ol>
+      <p style="margin-top:8px;">Total time: about 5 minutes (no re-downloading).</p>
+    </div>
+  </div>
+
+  <div class="faq">
+    <div class="faq-q"><span class="fq">Q</span>How do I check whether the server is completely gone?</div>
+    <div class="faq-a">
+      <p>Run the verification block in Section 13 — all lines should print <code>[OK]</code>. Also check:</p>
+      <ul style="margin: 6px 0 0 18px; line-height: 1.9; color: #334155;">
+        <li>Task Manager → no <code>python.exe</code> or <code>ollama.exe</code> processes (unless you kept Ollama).</li>
+        <li>Start Menu → no <em>TRAINING AI SERVER</em> folder.</li>
+        <li>Control Panel → Programs → no <em>TRAINING AI SERVER</em> entry.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /content -->
+</body>
+</html>

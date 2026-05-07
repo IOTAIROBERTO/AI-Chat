@@ -22,7 +22,6 @@ if not defined SELF_LOGGING (
 
 set "INSTALL_DIR=%~1"
 set "SETUP_LOG=%~2"
-set "MODELS_CFG=%~3"
 
 if "%INSTALL_DIR%"=="" (
     echo [ERROR] No installation directory supplied to smart_installer.bat
@@ -293,7 +292,7 @@ if %ERRORLEVEL% equ 0 (
 echo.
 
 :: ============================================================================
-:: PHASE 6/9 - Download AI models (driven by GUI selection)
+:: PHASE 6/9 - Download base AI model
 :: ============================================================================
 echo [PHASE 6/9] Downloading AI models...
 
@@ -320,55 +319,13 @@ if %ERRORLEVEL% equ 0 (
 )
 echo.
 
-:: Download additional models selected in the GUI (read from config file)
-if exist "%MODELS_CFG%" (
-    echo [INFO] Reading optional model selections from installer...
-    for /f "usebackq delims=" %%m in ("%MODELS_CFG%") do (
-        set "OPT_MODEL=%%m"
-        :: Trim spaces
-        set "OPT_MODEL=!OPT_MODEL: =!"
-        :: Skip blank lines and the base model (already installed)
-        if not "!OPT_MODEL!"=="" if not "!OPT_MODEL!"=="%BASE_MODEL%" (
-            echo [INFO] Checking optional model: !OPT_MODEL!
-            "%OLLAMA_CMD%" list 2>nul | findstr /l "!OPT_MODEL!" >nul 2>&1
-            if !ERRORLEVEL! equ 0 (
-                echo [OK] !OPT_MODEL! already installed
-            ) else (
-                echo [INFO] Downloading !OPT_MODEL! - please wait...
-                "%OLLAMA_CMD%" pull !OPT_MODEL!
-                if !ERRORLEVEL! neq 0 (
-                    echo [WARN] Could not download !OPT_MODEL! - skipping.
-                    echo [INFO] You can download it later from the launcher.
-                ) else (
-                    echo [OK] !OPT_MODEL! downloaded successfully
-                )
-            )
-            echo.
-        )
-    )
-) else (
-    echo [INFO] No model config found - only base model installed.
-)
-
 :: ============================================================================
-:: PHASE 7/9 - Determine best installed model for server config
+:: PHASE 7/9 - Set server default model
 :: ============================================================================
-echo [PHASE 7/9] Determining optimal default model...
+echo [PHASE 7/9] Setting default model...
 set "DEFAULT_MODEL=%BASE_MODEL%"
-
-:: phi4-mini is the preferred default Q&A model — check it first
-:: If not installed, fall back by quality order (last found wins)
-"%OLLAMA_CMD%" list 2>nul | findstr /l "phi4-mini" >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    set "DEFAULT_MODEL=phi4-mini"
-) else (
-    for %%m in ("qwen3:4b" "qwen3:8b" "gemma3:4b") do (
-        "%OLLAMA_CMD%" list 2>nul | findstr /l %%m >nul 2>&1
-        if !ERRORLEVEL! equ 0 set "DEFAULT_MODEL=%%~m"
-    )
-)
-
 echo [OK] Default model set to: %DEFAULT_MODEL%
+echo [INFO] Additional models (phi4-mini, qwen3:4b, etc.) can be downloaded from the launcher.
 echo.
 
 :: ============================================================================

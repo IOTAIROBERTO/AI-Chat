@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Server Tester — How to Use</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.65; color: #1a1a1a; background: #fff; }
+
+/* ── COVER ── */
+.cover {
+  page-break-after: always; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; min-height: 100vh;
+  background: linear-gradient(145deg, #0d1b2a 0%, #1b3a5c 60%, #2563a8 100%);
+  color: #fff; text-align: center; padding: 60px 40px;
+}
+.badge { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 6px 18px; font-size: 9pt; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 28px; color: #93c5fd; }
+.cover h1 { font-size: 34pt; font-weight: 700; line-height: 1.1; margin-bottom: 10px; }
+.cover h1 span { color: #60a5fa; }
+.cover .sub { font-size: 13pt; color: #cbd5e1; margin-bottom: 40px; font-weight: 300; }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 460px; width: 100%; margin-bottom: 40px; }
+.meta-box { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 14px; text-align: left; }
+.meta-box .lbl { font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; color: #93c5fd; margin-bottom: 4px; }
+.meta-box .val { font-size: 12pt; font-weight: 600; }
+.foot { font-size: 9pt; color: #64748b; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; max-width: 460px; width: 100%; }
+
+/* ── LAYOUT ── */
+.content { max-width: 800px; margin: 0 auto; padding: 36px 44px; }
+.toc-page { page-break-after: always; }
+.toc-title { font-size: 19pt; font-weight: 700; color: #0d1b2a; margin-bottom: 22px; padding-bottom: 10px; border-bottom: 3px solid #2563a8; }
+.toc-grp { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; margin: 18px 0 6px 6px; }
+.toc-section a { display: flex; align-items: baseline; text-decoration: none; color: #1e3a5f; padding: 4px 6px; border-radius: 4px; margin-bottom: 2px; font-size: 10.5pt; }
+.tn { font-size: 9pt; font-weight: 700; color: #2563a8; min-width: 26px; }
+.tl { flex: 1; padding: 0 6px; }
+.td { flex: 1; border-bottom: 1px dotted #94a3b8; margin: 0 6px; position: relative; top: -3px; }
+.tp { font-size: 9pt; color: #64748b; min-width: 18px; text-align: right; }
+
+/* ── SECTION HEADERS ── */
+.section { margin-bottom: 36px; }
+.sec-hdr { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }
+.sec-num { background: #2563a8; color: #fff; font-size: 10pt; font-weight: 700; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+h2 { font-size: 15pt; font-weight: 700; color: #0d1b2a; }
+h3 { font-size: 11pt; font-weight: 700; color: #1e3a5f; margin: 20px 0 8px; padding-left: 10px; border-left: 3px solid #2563a8; }
+h4 { font-size: 10pt; font-weight: 700; color: #334155; margin: 12px 0 6px; }
+p { margin-bottom: 9px; color: #334155; }
+
+/* ── CALLOUTS ── */
+.note { display: flex; gap: 10px; border-radius: 6px; padding: 11px 14px; margin: 12px 0; font-size: 10pt; page-break-inside: avoid; }
+.ni { font-size: 13pt; flex-shrink: 0; line-height: 1.4; }
+.nb { flex: 1; }
+.nb strong { display: block; margin-bottom: 2px; }
+.info   { background: #eff6ff; border-left: 4px solid #3b82f6; }
+.warn   { background: #fffbeb; border-left: 4px solid #f59e0b; }
+.danger { background: #fef2f2; border-left: 4px solid #ef4444; }
+.ok     { background: #f0fdf4; border-left: 4px solid #22c55e; }
+.tip    { background: #faf5ff; border-left: 4px solid #7c3aed; }
+
+/* ── VERIFY ── */
+.verify { background: #f0fdf4; border: 1px solid #86efac; border-left: 4px solid #16a34a; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0 14px; font-size: 10pt; page-break-inside: avoid; }
+.verify .vt { font-weight: 700; color: #15803d; margin-bottom: 4px; }
+
+/* ── CODE ── */
+pre { background: #0f172a; color: #e2e8f0; border-radius: 0 0 8px 8px; padding: 13px 17px; font-family: 'Consolas', monospace; font-size: 9pt; line-height: 1.8; margin: 0 0 10px; overflow-x: auto; page-break-inside: avoid; }
+pre.alone { border-radius: 8px; margin-top: 8px; }
+code { background: #f1f5f9; color: #1e3a5f; font-family: 'Consolas', monospace; font-size: 9pt; padding: 2px 5px; border-radius: 4px; border: 1px solid #e2e8f0; }
+
+/* ── TABLES ── */
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; page-break-inside: avoid; }
+thead tr { background: #1e3a5f; color: #fff; }
+thead th { padding: 9px 12px; text-align: left; font-size: 9pt; }
+tbody tr:nth-child(even) { background: #f8fafc; }
+td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; color: #334155; vertical-align: top; }
+td code { font-size: 8.5pt; }
+.tag { display: inline-block; font-size: 8pt; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+.yes  { background: #dcfce7; color: #15803d; }
+.no   { background: #f1f5f9; color: #64748b; }
+.good { background: #dcfce7; color: #15803d; }
+.warn2 { background: #fef9c3; color: #854d0e; }
+.bad  { background: #fee2e2; color: #991b1b; }
+
+/* ── UI MOCKUP ── */
+.ui-panel {
+  background: #0f172a; border: 1px solid #1e293b; border-radius: 10px;
+  padding: 0; margin: 14px 0; overflow: hidden; font-family: 'Consolas', monospace;
+  font-size: 9pt; page-break-inside: avoid;
+}
+.ui-panel-hdr {
+  background: #141414; border-bottom: 1px solid #2a2a2a;
+  padding: 8px 14px; display: flex; align-items: center; gap: 10px;
+}
+.ui-panel-hdr .ui-label { font-size: 8pt; letter-spacing: 0.1em; text-transform: uppercase; color: #555; font-weight: 700; }
+.ui-panel-body { padding: 12px 16px; }
+
+.ui-field { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.ui-input { background: #1e1e1e; border: 1px solid #2a2a2a; color: #e0e0e0; padding: 6px 10px; border-radius: 5px; font-size: 9pt; font-family: 'Consolas', monospace; min-width: 120px; }
+.ui-input.focus { border-color: #00d2ff; }
+.ui-btn { padding: 6px 14px; border-radius: 5px; font-size: 8.5pt; font-weight: 700; cursor: default; }
+.ui-btn.primary { background: #00d2ff; color: #000; }
+.ui-btn.ghost { background: #222; color: #e0e0e0; border: 1px solid #2a2a2a; }
+.ui-btn.green { background: #00ff88; color: #000; font-size: 8pt; padding: 4px 10px; }
+.ui-btn.proto { background: #222; color: #00ff88; border: 1px solid #2a2a2a; min-width: 58px; }
+
+.ui-health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.ui-health-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px; padding: 7px 10px; }
+.ui-hlabel { font-size: 7.5pt; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+.ui-hval { font-size: 9pt; font-weight: 700; }
+.ui-hval.ok  { color: #00ff88; }
+.ui-hval.warn { color: #ffaa00; }
+.ui-hval.err { color: #ff3366; }
+.ui-hval.dim { color: #aaa; }
+
+.ui-tab-row { display: flex; gap: 4px; margin-bottom: 10px; }
+.ui-tab { flex: 1; padding: 6px; text-align: center; border-radius: 5px; font-size: 8pt; font-weight: 700; background: #1a1a1a; color: #555; border: 1px solid #2a2a2a; }
+.ui-tab.active { background: #00d2ff; color: #000; border-color: #00d2ff; }
+
+.ui-text-input { width: 100%; background: #1e1e1e; border: 1px solid #2a2a2a; border-left: 3px solid #00d2ff; color: #e0e0e0; padding: 8px 10px; border-radius: 5px; font-size: 9pt; margin-bottom: 8px; font-family: 'Consolas', monospace; }
+.ui-record-btn { width: 100%; padding: 18px; background: #1e1e1e; color: #e0e0e0; border: 2px solid #2a2a2a; border-radius: 6px; font-size: 10pt; font-weight: 700; text-align: center; margin-bottom: 8px; }
+.ui-record-btn.active { background: #0a2a0a; color: #00ff88; border-color: #00ff88; }
+
+.ui-timer { display: flex; align-items: center; gap: 10px; background: #0d1a1a; border: 1px solid #1a3a3a; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; }
+.ui-timer-clock { font-size: 1.2rem; font-weight: 700; color: #00d2ff; min-width: 52px; }
+.ui-timer-bar-wrap { flex: 1; background: #111; border-radius: 3px; height: 4px; overflow: hidden; }
+.ui-timer-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #00d2ff, #00ff88); }
+
+.ui-result { background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 7px; padding: 12px; min-height: 80px; }
+.ui-rlabel { font-size: 7.5pt; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+.ui-rq { color: #888; font-style: italic; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #222; font-size: 9pt; }
+.ui-ra { color: #e0e0e0; font-size: 9pt; line-height: 1.6; margin-bottom: 8px; }
+.ui-badges { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid #222; }
+.ui-badge { background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 3px; padding: 2px 7px; font-size: 7.5pt; color: #555; }
+.ui-badge .v { color: #fff; }
+.ui-badge.lat .v { color: #00d2ff; }
+.ui-badge.src .v { color: #00ff88; }
+.ui-badge.lng .v { color: #ffaa00; }
+
+.ui-console { background: #050505; border: 1px solid #1a1a1a; border-radius: 6px; padding: 8px 10px; font-size: 8pt; line-height: 1.8; }
+.cl { display: flex; gap: 6px; }
+.ct { color: #333; flex-shrink: 0; }
+.clv { flex-shrink: 0; font-weight: 700; min-width: 40px; }
+.cm2 { color: #777; word-break: break-all; }
+.cl.ok  .clv { color: #00ff88; }
+.cl.info .clv { color: #00d2ff; }
+.cl.warn .clv { color: #ffaa00; }
+.cl.err  .clv { color: #ff3366; }
+.cl.data .clv { color: #444; }
+.cl.data .cm2 { color: #333; }
+
+.ui-manual-item { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; padding: 7px 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 8.5pt; }
+.ui-manual-name { color: #00d2ff; font-weight: 700; }
+.ui-manual-meta { color: #444; font-size: 8pt; }
+
+.ui-cert-banner { background: #1a1000; border: 1px solid #ffaa00; border-radius: 6px; padding: 9px 12px; font-size: 8.5pt; color: #ffaa00; margin-top: 8px; line-height: 1.8; }
+.ui-cert-link { color: #00d2ff; text-decoration: underline; }
+
+/* ── CALLOUT NUMBERS ── */
+.ann { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #2563a8; color: #fff; border-radius: 50%; font-size: 8pt; font-weight: 700; flex-shrink: 0; margin-right: 3px; vertical-align: middle; }
+
+/* ── STEPS ── */
+.steps { counter-reset: st; }
+.step { display: flex; gap: 16px; margin-bottom: 20px; page-break-inside: avoid; }
+.sn { flex-shrink: 0; width: 32px; height: 32px; background: #1e3a5f; color: #fff; font-weight: 700; font-size: 12pt; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.sb { flex: 1; }
+.sb h4 { margin-top: 0; color: #1e3a5f; font-size: 11pt; }
+
+/* ── ERR CARDS ── */
+.err-card { border: 1px solid #fca5a5; border-radius: 8px; margin-bottom: 18px; overflow: hidden; page-break-inside: avoid; }
+.err-hdr { background: #fef2f2; padding: 11px 16px; border-bottom: 1px solid #fca5a5; display: flex; align-items: center; gap: 9px; }
+.err-hdr strong { font-size: 10.5pt; color: #991b1b; }
+.err-body { padding: 13px 16px; }
+
+.warn-card { border: 1px solid #fcd34d; border-radius: 8px; margin-bottom: 18px; overflow: hidden; page-break-inside: avoid; }
+.warn-hdr { background: #fffbeb; padding: 11px 16px; border-bottom: 1px solid #fcd34d; display: flex; align-items: center; gap: 9px; }
+.warn-hdr strong { font-size: 10.5pt; color: #92400e; }
+.warn-body { padding: 13px 16px; }
+
+hr.div { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
+.pb { page-break-before: always; }
+.small { font-size: 9pt; color: #64748b; }
+
+@media print {
+  body { padding: 0; }
+  .content { padding: 18px 30px; max-width: 100%; }
+  .cover { min-height: 100vh; }
+  pre { font-size: 8.5pt; }
+  table { font-size: 9pt; }
+  a { color: inherit !important; text-decoration: none; }
+}
+@page { size: A4; margin: 18mm 15mm 18mm 15mm; }
+@page :first { margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- ══ COVER ══ -->
+<div class="cover">
+  <div class="badge">User Guide · v5.0</div>
+  <h1>AI SERVER<br><span>TESTER</span></h1>
+  <div class="sub">How to use the Debug &amp; Test Panel</div>
+  <div class="meta-grid">
+    <div class="meta-box"><div class="lbl">Access</div><div class="val">Browser · any device</div></div>
+    <div class="meta-box"><div class="lbl">Protocol</div><div class="val">HTTPS · Port 5000</div></div>
+    <div class="meta-box"><div class="lbl">Query modes</div><div class="val">Text &amp; Audio (STT)</div></div>
+    <div class="meta-box"><div class="lbl">Languages</div><div class="val">ES / EN Bilingual</div></div>
+  </div>
+  <div class="foot">VR Training Solutions &nbsp;·&nbsp; RAG · Whisper STT · ChromaDB · Ollama LLM</div>
+</div>
+
+<!-- ══ TABLE OF CONTENTS ══ -->
+<div class="content toc-page">
+  <div class="toc-title">Table of Contents</div>
+
+  <div class="toc-grp">Getting started</div>
+  <div class="toc-section"><a href="#s1"><span class="tn">01</span><span class="tl">What the tester is and how to open it</span><span class="td"></span><span class="tp">3</span></a></div>
+  <div class="toc-section"><a href="#s2"><span class="tn">02</span><span class="tl">Panel layout — overview</span><span class="td"></span><span class="tp">3</span></a></div>
+
+  <div class="toc-grp">Left column — Connection &amp; Status</div>
+  <div class="toc-section"><a href="#s3"><span class="tn">03</span><span class="tl">Connection panel — connect to the server</span><span class="td"></span><span class="tp">4</span></a></div>
+  <div class="toc-section"><a href="#s4"><span class="tn">04</span><span class="tl">Server status panel — reading the health metrics</span><span class="td"></span><span class="tp">5</span></a></div>
+  <div class="toc-section"><a href="#s5"><span class="tn">05</span><span class="tl">Indexed manuals panel</span><span class="td"></span><span class="tp">6</span></a></div>
+
+  <div class="toc-grp">Right column — Querying the server</div>
+  <div class="toc-section"><a href="#s6"><span class="tn">06</span><span class="tl">Text query — ask a question by typing</span><span class="td"></span><span class="tp">7</span></a></div>
+  <div class="toc-section"><a href="#s7"><span class="tn">07</span><span class="tl">Audio query — ask a question by voice</span><span class="td"></span><span class="tp">8</span></a></div>
+  <div class="toc-section"><a href="#s8"><span class="tn">08</span><span class="tl">Response box — reading the answer</span><span class="td"></span><span class="tp">9</span></a></div>
+  <div class="toc-section"><a href="#s9"><span class="tn">09</span><span class="tl">Debug console — monitoring what happens</span><span class="td"></span><span class="tp">10</span></a></div>
+
+  <div class="toc-grp">Troubleshooting</div>
+  <div class="toc-section"><a href="#s10"><span class="tn">10</span><span class="tl">Common errors and fixes</span><span class="td"></span><span class="tp">11</span></a></div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<div class="content">
+
+<!-- ─── 01 WHAT IS IT ─── -->
+<div class="section" id="s1">
+  <div class="sec-hdr"><div class="sec-num">01</div><h2>What the tester is and how to open it</h2></div>
+
+  <p>The <strong>AI Server Tester</strong> is a browser-based debug panel that lets you connect to the RAG server and test it interactively — send text and voice queries, check which manuals are indexed, monitor real-time server health, and read timestamped debug logs.</p>
+  <p>It is a standalone HTML file. No installation required. Open it in any modern browser on any device that is on the same network as the server PC.</p>
+
+  <h3>Two ways to open it</h3>
+
+  <table>
+    <thead><tr><th>Method</th><th>How</th><th>Best for</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>A — Open the file directly</strong></td>
+        <td>Double-click <code>AI_Server_Tester.html</code> in File Explorer. Works on Windows, Mac, or Android.</td>
+        <td>Local PC testing, quick checks</td>
+      </tr>
+      <tr>
+        <td><strong>B — Open via the server URL</strong></td>
+        <td>With the server running, open <code>https://&lt;SERVER-IP&gt;:5000/admin</code> in any browser.</td>
+        <td>Meta Quest, phones, other devices on the network — no file transfer needed</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note info">
+    <div class="ni">ℹ️</div>
+    <div class="nb"><strong>Method B is recommended for Meta Quest.</strong> Open the Quest browser, type the server address with <code>/admin</code> at the end (e.g. <code>https://192.168.1.50:5000/admin</code>) and accept the certificate warning once.</div>
+  </div>
+
+  <div class="note warn">
+    <div class="ni">⚠️</div>
+    <div class="nb"><strong>The server must be running</strong> before you can connect. Start it via the launcher (<code>start_server.bat</code>) or the GUI, then wait for the green "Running" indicator before opening the tester.</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 02 LAYOUT ─── -->
+<div class="section" id="s2">
+  <div class="sec-hdr"><div class="sec-num">02</div><h2>Panel layout — overview</h2></div>
+
+  <p>The panel is split into three zones:</p>
+
+  <table>
+    <thead><tr><th>Zone</th><th>Location</th><th>Contains</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Header bar</strong></td><td>Top, full width</td><td>Connection indicator dot, status text, quick Health Check button</td></tr>
+      <tr><td><strong>Left column</strong></td><td>Left sidebar (~340 px)</td><td>Connection panel · Server status · Indexed manuals list</td></tr>
+      <tr><td><strong>Right column</strong></td><td>Main area</td><td>Query panel (text / audio tabs) · Request timer · Response box · Debug console</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note tip">
+    <div class="ni">💡</div>
+    <div class="nb">On narrow screens (phones, Quest) the two columns stack vertically. Scroll down to reach the right column after connecting.</div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 03 CONNECTION ─── -->
+<div class="section" id="s3">
+  <div class="sec-hdr"><div class="sec-num">03</div><h2>Connection panel — connect to the server</h2></div>
+
+  <!-- Mockup -->
+  <div class="ui-panel">
+    <div class="ui-panel-hdr"><span class="ui-label">⚡ Conexión</span></div>
+    <div class="ui-panel-body">
+      <div class="ui-field">
+        <span class="ui-btn proto">HTTPS</span>
+        <span class="ui-input" style="flex:2;">192.168.1.50</span>
+        <span class="ui-input" style="flex:1;">5000</span>
+      </div>
+      <div class="ui-btn primary" style="width:100%;text-align:center;padding:10px;display:block;">CONECTAR / VERIFICAR</div>
+    </div>
+  </div>
+
+  <h3>Fields and controls</h3>
+
+  <table>
+    <thead><tr><th>Control</th><th>What to enter / do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Protocol button</strong><br><code style="font-size:8pt;">HTTPS / HTTP</code></td>
+        <td>Click to toggle between HTTPS and HTTP. Leave on <strong>HTTPS</strong> (green) unless the server explicitly uses HTTP. The server uses HTTPS by default for Meta Quest compatibility.</td>
+      </tr>
+      <tr>
+        <td><strong>IP address field</strong></td>
+        <td>Enter the <strong>local IP of the server PC</strong> — not <code>localhost</code> unless the tester is running on the same machine as the server.<br>Find the IP with: <code>ipconfig | findstr IPv4</code> in CMD on the server PC.</td>
+      </tr>
+      <tr>
+        <td><strong>Port field</strong></td>
+        <td>Leave as <code>5000</code> unless the server was started on a different port.</td>
+      </tr>
+      <tr>
+        <td><strong>CONECTAR / VERIFICAR</strong></td>
+        <td>Runs a health check against <code>/health</code>. Populates the status panel and loads the manual list if the connection succeeds.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>SSL certificate warning — how to accept it</h3>
+  <p>The server uses a self-signed certificate. Browsers block HTTPS connections to self-signed certs by default. If the connection fails, a yellow banner appears:</p>
+
+  <div class="ui-panel">
+    <div class="ui-panel-body">
+      <div class="ui-cert-banner">
+        ⚠ Certificado SSL no confiable.<br>
+        1. Abre <span class="ui-cert-link">https://192.168.1.50:5000/health</span> en una nueva pestaña<br>
+        2. Acepta el certificado (Avanzado → Continuar)<br>
+        3. Vuelve aquí y presiona <strong>CONECTAR</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="steps" style="margin-top:14px;">
+    <div class="step">
+      <div class="sn">1</div>
+      <div class="sb">
+        <h4>Click the link in the yellow banner</h4>
+        <p>It opens <code>https://&lt;IP&gt;:5000/health</code> in a new tab. The browser shows a security warning page.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">2</div>
+      <div class="sb">
+        <h4>Accept the certificate</h4>
+        <p>Click <em>Advanced</em> → <em>Proceed to [IP address] (unsafe)</em>. You should see a JSON response like <code>{"status":"healthy",...}</code>. That tab can be closed.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">3</div>
+      <div class="sb">
+        <h4>Come back and click CONECTAR / VERIFICAR</h4>
+        <p>The connection should now succeed. The header dot turns green. <strong>You only need to do this once per browser per session.</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="verify">
+    <div class="vt">✅ Connection confirmed when:</div>
+    <p>The dot in the header bar turns solid green · Status text shows the IP and response time (e.g. <em>192.168.1.50:5000 — 42ms</em>) · The server status panel fills with data.</p>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 04 SERVER STATUS ─── -->
+<div class="section" id="s4">
+  <div class="sec-hdr"><div class="sec-num">04</div><h2>Server status panel — reading the health metrics</h2></div>
+
+  <div class="ui-panel">
+    <div class="ui-panel-hdr"><span class="ui-label">🖥 Estado del Servidor</span></div>
+    <div class="ui-panel-body">
+      <div class="ui-health-grid">
+        <div class="ui-health-item"><div class="ui-hlabel">Estado</div><div class="ui-hval ok">Online</div></div>
+        <div class="ui-health-item"><div class="ui-hlabel">Whisper STT</div><div class="ui-hval ok">Cargado ✓</div></div>
+        <div class="ui-health-item"><div class="ui-hlabel">Modelo LLM</div><div class="ui-hval ok">phi4-mini</div></div>
+        <div class="ui-health-item"><div class="ui-hlabel">Chunks indexados</div><div class="ui-hval dim">3 847</div></div>
+        <div class="ui-health-item"><div class="ui-hlabel">Latencia</div><div class="ui-hval ok">38ms</div></div>
+        <div class="ui-health-item"><div class="ui-hlabel">Modo bilingüe</div><div class="ui-hval ok">Activo ✓</div></div>
+      </div>
+    </div>
+  </div>
+
+  <table style="margin-top:14px;">
+    <thead><tr><th>Metric</th><th>What it means</th><th>Expected value</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Estado</strong></td>
+        <td>Overall server state. <span class="tag good">Online</span> means the Flask server responded correctly.</td>
+        <td><span class="tag good">Online</span> (green)</td>
+      </tr>
+      <tr>
+        <td><strong>Whisper STT</strong></td>
+        <td>Whether the speech recognition model is loaded. Required for audio queries.</td>
+        <td><span class="tag good">Cargado ✓</span> — if shown in red, audio queries will fail. The Whisper model downloads on first voice use (~769 MB).</td>
+      </tr>
+      <tr>
+        <td><strong>Modelo LLM</strong></td>
+        <td>The active Ollama model that answers questions (e.g. <code>phi4-mini</code>).</td>
+        <td>Any model name in green. If blank or red — no model is loaded; use the launcher to download one.</td>
+      </tr>
+      <tr>
+        <td><strong>Chunks indexados</strong></td>
+        <td>Number of text chunks from all indexed PDFs stored in ChromaDB. 0 = no manuals indexed yet.</td>
+        <td>Any number &gt; 0 once you have indexed at least one PDF.</td>
+      </tr>
+      <tr>
+        <td><strong>Latencia</strong></td>
+        <td>Round-trip time of the <code>/health</code> request in milliseconds.</td>
+        <td><span class="tag good">&lt; 200ms</span> = good · <span class="tag warn2">200–600ms</span> = acceptable · <span class="tag bad">&gt; 600ms</span> = network issue</td>
+      </tr>
+      <tr>
+        <td><strong>Modo bilingüe</strong></td>
+        <td>Whether bilingual Spanish/English mode is active.</td>
+        <td><span class="tag good">Activo ✓</span> always expected.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="div">
+
+<!-- ─── 05 MANUALS ─── -->
+<div class="section" id="s5">
+  <div class="sec-hdr"><div class="sec-num">05</div><h2>Indexed manuals panel</h2></div>
+
+  <div class="ui-panel">
+    <div class="ui-panel-hdr">
+      <span class="ui-label" style="flex:1;">📚 Manuales Indexados</span>
+      <span class="ui-btn ghost" style="font-size:7.5pt;padding:3px 8px;">↺</span>
+    </div>
+    <div class="ui-panel-body">
+      <div class="ui-manual-item">
+        <span class="ui-manual-name">Manual-AMX_MANTENIMIENTO</span>
+        <span class="ui-manual-meta">1 248 chunks · 84 pgs</span>
+      </div>
+      <div class="ui-manual-item">
+        <span class="ui-manual-name">Manual-Operaciones-2024</span>
+        <span class="ui-manual-meta">632 chunks · 41 pgs</span>
+      </div>
+    </div>
+  </div>
+
+  <p>This panel lists every PDF that has been indexed into the RAG database. It loads automatically when you connect and can be refreshed with the <strong>↺</strong> button.</p>
+
+  <table>
+    <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Manual name</strong> (blue)</td><td>The filename of the PDF without the <code>.pdf</code> extension. This is also the name used to filter queries to a specific document.</td></tr>
+      <tr><td><strong>chunks</strong></td><td>Number of text segments extracted from this PDF. More chunks = more content searchable by the RAG engine.</td></tr>
+      <tr><td><strong>pgs</strong></td><td>Number of pages in the original PDF that contained extractable text.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note info">
+    <div class="ni">ℹ️</div>
+    <div class="nb">If the panel shows <em>"No hay manuales indexados"</em>, no PDFs have been uploaded yet. Use the launcher GUI to index a PDF first, then refresh this panel.</div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 06 TEXT QUERY ─── -->
+<div class="section" id="s6">
+  <div class="sec-hdr"><div class="sec-num">06</div><h2>Text query — ask a question by typing</h2></div>
+
+  <div class="ui-panel">
+    <div class="ui-panel-hdr"><span class="ui-label">🔍 Consulta</span></div>
+    <div class="ui-panel-body">
+      <div class="ui-tab-row">
+        <div class="ui-tab active">✏ TEXTO</div>
+        <div class="ui-tab">🎤 AUDIO</div>
+      </div>
+      <div class="ui-text-input">¿Cuál es el procedimiento de reinicio del motor?</div>
+      <div class="ui-btn primary" style="width:100%;text-align:center;padding:10px;display:block;">ENVIAR CONSULTA</div>
+    </div>
+  </div>
+
+  <div class="steps" style="margin-top:14px;">
+    <div class="step">
+      <div class="sn">1</div>
+      <div class="sb">
+        <h4>Make sure you are connected</h4>
+        <p>The header dot must be green. If not, click <strong>CONECTAR / VERIFICAR</strong> first.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">2</div>
+      <div class="sb">
+        <h4>Select the TEXT tab</h4>
+        <p>Click <strong>✏ TEXTO</strong> in the tab row. It highlights in cyan when active.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">3</div>
+      <div class="sb">
+        <h4>Type your question</h4>
+        <p>Click the text field (highlighted with a cyan left border) and type your question in Spanish or English. The server auto-detects language from the prompt.</p>
+        <p class="small">Examples: <em>¿Cómo reiniciar el sistema de refrigeración?</em> · <em>What is the maximum operating pressure?</em></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">4</div>
+      <div class="sb">
+        <h4>Send — button or Enter key</h4>
+        <p>Click <strong>ENVIAR CONSULTA</strong> or press <kbd>Enter</kbd>. The request timer starts immediately.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">5</div>
+      <div class="sb">
+        <h4>Read the answer</h4>
+        <p>The response box fills with the answer, timing badges, model used, and source references. See Section 08 for how to read it.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note tip">
+    <div class="ni">💡</div>
+    <div class="nb"><strong>Tip — ask in the language of the manual.</strong> If the PDF is in Spanish, ask in Spanish. The RAG retrieval is more accurate when the query language matches the document language. Both languages are fully supported.</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 07 AUDIO QUERY ─── -->
+<div class="section" id="s7">
+  <div class="sec-hdr"><div class="sec-num">07</div><h2>Audio query — ask a question by voice</h2></div>
+
+  <div class="ui-panel">
+    <div class="ui-panel-hdr"><span class="ui-label">🔍 Consulta</span></div>
+    <div class="ui-panel-body">
+      <div class="ui-tab-row">
+        <div class="ui-tab">✏ TEXTO</div>
+        <div class="ui-tab active">🎤 AUDIO</div>
+      </div>
+      <div class="ui-record-btn">🎤 &nbsp; MANTENER PARA HABLAR</div>
+      <div style="display:flex;gap:10px;font-size:8pt;color:#444;margin-bottom:8px;flex-wrap:wrap;">
+        <span>Grabación: <strong style="color:#aaa">0s</strong></span>
+        <span>Tamaño: <strong style="color:#aaa">0 KB</strong></span>
+        <span>Formato: <strong style="color:#aaa">webm/opus</strong></span>
+        <span>Enviado como: <strong style="color:#aaa">WAV 16kHz mono</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <p>The audio pipeline: <strong>Record → Convert to WAV → STT (Whisper) → RAG retrieval → LLM answer</strong>. The tester handles everything automatically.</p>
+
+  <div class="steps" style="margin-top:14px;">
+    <div class="step">
+      <div class="sn">1</div>
+      <div class="sb">
+        <h4>Select the AUDIO tab</h4>
+        <p>Click <strong>🎤 AUDIO</strong>. The hold-to-record button appears.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">2</div>
+      <div class="sb">
+        <h4>Grant microphone permission (first time only)</h4>
+        <p>The browser asks for microphone access when you first press the button. Click <em>Allow</em>. The status bar shows <em>"Micrófono listo"</em> when granted.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">3</div>
+      <div class="sb">
+        <h4>Hold the button and speak</h4>
+        <p><strong>Press and hold</strong> the <em>🎤 MANTENER PARA HABLAR</em> button (mouse click or touch on Quest). The button turns green and shows <em>⏺ GRABANDO...</em> with a live duration counter. Speak your question clearly.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">4</div>
+      <div class="sb">
+        <h4>Release to send</h4>
+        <p>Release the button. The audio is automatically converted to 16 kHz mono WAV and sent to the server. The request timer starts. The full pipeline (STT + RAG + LLM) typically takes 5–20 seconds.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">5</div>
+      <div class="sb">
+        <h4>Check the transcription and answer</h4>
+        <p>The response box shows what Whisper heard (<em>Pregunta</em>) and the AI answer. If the transcription is wrong, speak more slowly and clearly or move closer to the microphone.</p>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Audio stat shown</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Grabación</strong></td><td>Recording duration in seconds</td></tr>
+      <tr><td><strong>Tamaño</strong></td><td>Raw audio blob size before conversion</td></tr>
+      <tr><td><strong>Formato</strong></td><td>Format captured by the browser (<code>webm/opus</code>, <code>ogg</code>, or <code>wav</code> depending on the browser)</td></tr>
+      <tr><td><strong>Enviado como</strong></td><td>Always <code>WAV 16kHz mono</code> — the tester converts the audio before sending, which is what Whisper expects</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <div class="ni">⚠️</div>
+    <div class="nb"><strong>Whisper STT must be loaded.</strong> Check the Server Status panel — <em>Whisper STT</em> must show <span style="color:#15803d;font-weight:700;">Cargado ✓</span>. On the very first audio query the Whisper model downloads (~769 MB) and the request will take longer.</div>
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 08 RESPONSE BOX ─── -->
+<div class="section" id="s8">
+  <div class="sec-hdr"><div class="sec-num">08</div><h2>Response box — reading the answer</h2></div>
+
+  <div class="ui-panel">
+    <div class="ui-panel-hdr"><span class="ui-label" style="flex:1;">💬 Respuesta</span><span class="ui-btn ghost" style="font-size:7pt;padding:3px 8px;">Limpiar</span></div>
+    <div class="ui-panel-body">
+      <div class="ui-result">
+        <div class="ui-rlabel">Pregunta</div>
+        <div class="ui-rq">¿Cuál es el procedimiento de reinicio del motor?</div>
+        <div class="ui-rlabel">Respuesta</div>
+        <div class="ui-ra">Para reiniciar el motor, desconecte la alimentación principal durante 10 segundos, verifique que los interruptores de seguridad estén en posición OFF, luego reconecte la alimentación. Fuente: Manual-AMX_MANTENIMIENTO, página 34.</div>
+        <div class="ui-badges">
+          <div class="ui-badge lat">Tiempo total: <span class="v">4 820ms</span></div>
+          <div class="ui-badge">STT: <span class="v">1 200ms</span></div>
+          <div class="ui-badge">RAG: <span class="v">80ms</span></div>
+          <div class="ui-badge">LLM: <span class="v">3 540ms</span></div>
+          <div class="ui-badge">Modelo: <span class="v">phi4-mini</span></div>
+          <div class="ui-badge lng">Idioma: <span class="v">ES</span></div>
+          <div class="ui-badge src">Fuentes: <span class="v">Manual-AMX_MANTENIMIENTO p.34</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <table style="margin-top:14px;">
+    <thead><tr><th>Part of the response</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Pregunta</strong> (italics, grey)</td><td>The question as typed by you (text mode) or transcribed by Whisper (audio mode). In audio mode, verify this matches what you said.</td></tr>
+      <tr><td><strong>Respuesta</strong> (white text)</td><td>The AI-generated answer. Always ends with a source citation: <em>Fuente: [Manual name], página [N]</em>.</td></tr>
+      <tr><td><span class="tag" style="background:#dbeafe;color:#1d4ed8;">Tiempo total</span> (cyan)</td><td>Wall-clock time from sending the request to receiving the answer.</td></tr>
+      <tr><td><span class="tag" style="background:#dbeafe;color:#1d4ed8;">STT</span></td><td>Whisper transcription time (audio mode only). Typically 1–4 seconds on CPU.</td></tr>
+      <tr><td><span class="tag" style="background:#dbeafe;color:#1d4ed8;">RAG</span></td><td>ChromaDB vector search time. Usually under 200 ms regardless of database size.</td></tr>
+      <tr><td><span class="tag" style="background:#dbeafe;color:#1d4ed8;">LLM</span></td><td>Ollama generation time. Depends on model and hardware (phi4-mini on CPU: 3–8 s).</td></tr>
+      <tr><td><strong>Modelo</strong></td><td>Which Ollama model answered the query (e.g. <code>phi4-mini</code>).</td></tr>
+      <tr><td><span class="tag" style="background:#fef9c3;color:#854d0e;">Idioma</span> (amber)</td><td>Language detected by Whisper — audio mode only. <code>ES</code> = Spanish, <code>EN</code> = English.</td></tr>
+      <tr><td><span class="tag good">Fuentes</span> (green)</td><td>Which manual(s) and page(s) the RAG engine retrieved the context from. Always verify this points to a real manual in your database.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok">
+    <div class="ni">✅</div>
+    <div class="nb"><strong>A good answer</strong> always ends with a source citation (<em>Fuente:</em>), contains no preamble phrases like "Según el manual…", and is 2–3 sentences maximum. The source page reference allows you to verify the information directly in the PDF.</div>
+  </div>
+
+  <div class="note info">
+    <div class="ni">ℹ️</div>
+    <div class="nb">Use the <strong>Limpiar</strong> button (top-right of the response box) to clear the previous answer before sending a new query, so results don't mix visually.</div>
+  </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── 09 DEBUG CONSOLE ─── -->
+<div class="section" id="s9">
+  <div class="sec-hdr"><div class="sec-num">09</div><h2>Debug console — monitoring what happens</h2></div>
+
+  <div class="ui-panel">
+    <div class="ui-panel-hdr" style="justify-content:space-between;">
+      <span class="ui-label">🐛 Debug Console</span>
+      <div style="display:flex;gap:4px;">
+        <span class="ui-btn ghost" style="font-size:7pt;padding:3px 8px;color:white;">ALL</span>
+        <span class="ui-btn ghost" style="font-size:7pt;padding:3px 8px;">INFO</span>
+        <span class="ui-btn ghost" style="font-size:7pt;padding:3px 8px;">WARN</span>
+        <span class="ui-btn ghost" style="font-size:7pt;padding:3px 8px;">ERR</span>
+        <span class="ui-btn ghost" style="font-size:7pt;padding:3px 8px;margin-left:4px;">Clear</span>
+      </div>
+    </div>
+    <div class="ui-panel-body">
+      <div class="ui-console">
+        <div class="cl info"><span class="ct">14:22:01.004</span><span class="clv">INFO </span><span class="cm2">Debug panel ready — protocol: https</span></div>
+        <div class="cl info"><span class="ct">14:22:01.006</span><span class="clv">INFO </span><span class="cm2">Health check → https://192.168.1.50:5000/health</span></div>
+        <div class="cl ok">  <span class="ct">14:22:01.048</span><span class="clv">OK   </span><span class="cm2">Connected in 42ms — HTTP 200</span></div>
+        <div class="cl data"><span class="ct">14:22:01.049</span><span class="clv">DATA </span><span class="cm2">Model: phi4-mini | Whisper: true | Bilingual: true</span></div>
+        <div class="cl data"><span class="ct">14:22:01.050</span><span class="clv">DATA </span><span class="cm2">Chunks: 3847 / 50000 (7.7%)</span></div>
+        <div class="cl ok">  <span class="ct">14:22:01.080</span><span class="clv">OK   </span><span class="cm2">2 manual(s) loaded</span></div>
+        <div class="cl info"><span class="ct">14:22:09.112</span><span class="clv">INFO </span><span class="cm2">TEXT query: "¿Cuál es el procedimiento de reinicio?"</span></div>
+        <div class="cl ok">  <span class="ct">14:22:13.940</span><span class="clv">OK   </span><span class="cm2">Answer received — model: phi4-mini | sources: 2</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Log levels</h3>
+  <table>
+    <thead><tr><th>Level</th><th>Color</th><th>What it shows</th></tr></thead>
+    <tbody>
+      <tr><td><strong>INFO</strong></td><td style="color:#00d2ff;font-weight:700;">Cyan</td><td>What the tester is doing (sending request, switching tabs, starting recording)</td></tr>
+      <tr><td><strong>OK</strong></td><td style="color:#00ff88;font-weight:700;">Green</td><td>Successful operations (connected, answer received, manual loaded)</td></tr>
+      <tr><td><strong>WARN</strong></td><td style="color:#ffaa00;font-weight:700;">Amber</td><td>Non-fatal issues (WAV conversion fallback, no manuals found)</td></tr>
+      <tr><td><strong>ERR</strong></td><td style="color:#ff3366;font-weight:700;">Red</td><td>Failures (connection refused, HTTP error, query timeout)</td></tr>
+      <tr><td><strong>DATA</strong></td><td style="color:#444;font-weight:700;">Dark grey</td><td>Raw payload details (model name, chunk count, source pages) — verbose info</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Filter buttons</h3>
+  <p>Use the filter buttons to reduce noise:</p>
+  <table>
+    <thead><tr><th>Filter</th><th>Shows</th><th>Use when</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ALL</strong></td><td>Everything</td><td>Default — full picture</td></tr>
+      <tr><td><strong>INFO</strong></td><td>INFO + OK + WARN + ERR (no DATA)</td><td>Operational overview without raw payload clutter</td></tr>
+      <tr><td><strong>WARN</strong></td><td>WARN + ERR only</td><td>Investigating problems</td></tr>
+      <tr><td><strong>ERR</strong></td><td>ERR only</td><td>Debugging a specific failure</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pb"></div>
+
+<!-- ─── 10 TROUBLESHOOTING ─── -->
+<div class="section" id="s10">
+  <div class="sec-hdr"><div class="sec-num">10</div><h2>Common errors and fixes</h2></div>
+
+  <!-- E1 -->
+  <div class="err-card">
+    <div class="err-hdr"><span style="font-size:14pt">🔴</span><strong>Connection fails immediately — yellow cert banner appears</strong></div>
+    <div class="err-body">
+      <p><strong>Cause:</strong> The browser blocks HTTPS connections to self-signed certificates by default.</p>
+      <p><strong>Fix:</strong> Follow the three steps in Section 03 — open the <code>/health</code> link from the banner in a new tab, accept the certificate, then reconnect.</p>
+    </div>
+  </div>
+
+  <!-- E2 -->
+  <div class="err-card">
+    <div class="err-hdr"><span style="font-size:14pt">🔴</span><strong>Connection fails — no banner, console shows "fetch failed" or timeout</strong></div>
+    <div class="err-body">
+      <p><strong>Cause A:</strong> Wrong IP address — you entered <code>localhost</code> but the tester is on a different device.</p>
+      <p><strong>Fix A:</strong> Find the server PC's IP with <code>ipconfig | findstr IPv4</code> and enter that IP.</p>
+      <p><strong>Cause B:</strong> The server is not running.</p>
+      <p><strong>Fix B:</strong> Open the launcher on the server PC and click <em>▶ Start Server</em>. Wait for the green indicator before connecting.</p>
+      <p><strong>Cause C:</strong> Firewall is blocking port 5000.</p>
+      <p><strong>Fix C:</strong> Run this on the server PC as Administrator:</p>
+      <pre class="alone">netsh advfirewall firewall add rule name="TRAINING AI SERVER" dir=in action=allow protocol=TCP localport=5000-5010 profile=any</pre>
+    </div>
+  </div>
+
+  <!-- E3 -->
+  <div class="err-card">
+    <div class="err-hdr"><span style="font-size:14pt">🔴</span><strong>Server status shows — Modelo LLM: blank or red</strong></div>
+    <div class="err-body">
+      <p><strong>Cause:</strong> No Ollama model is installed, or the configured model was deleted.</p>
+      <p><strong>Fix:</strong> Open the launcher → Download section → select <code>phi4-mini</code> → click Download. The server restarts automatically after the download completes.</p>
+    </div>
+  </div>
+
+  <!-- E4 -->
+  <div class="err-card">
+    <div class="err-hdr"><span style="font-size:14pt">🔴</span><strong>Query returns — "No encontré información relevante en los manuales"</strong></div>
+    <div class="err-body">
+      <p><strong>Cause:</strong> No PDFs have been indexed, or the query does not match anything in the indexed content.</p>
+      <p><strong>Fix A:</strong> Check the <em>Indexed manuals</em> panel — if empty, index a PDF via the launcher first.</p>
+      <p><strong>Fix B:</strong> Rephrase the question using keywords that appear in the document. The RAG retrieval is keyword-sensitive; exact terminology from the manual gives better results.</p>
+    </div>
+  </div>
+
+  <!-- E5 -->
+  <div class="warn-card">
+    <div class="warn-hdr"><span style="font-size:14pt">🟡</span><strong>Whisper STT shows "No cargado" — audio tab disabled effectively</strong></div>
+    <div class="warn-body">
+      <p><strong>Cause A:</strong> Whisper model is still downloading on first use (~769 MB). Wait and refresh the health check.</p>
+      <p><strong>Cause B:</strong> Whisper failed to initialize (Python package issue or missing CUDA DLL).</p>
+      <p><strong>Fix:</strong> Check the server console log at <code>%APPDATA%\..\Local\TRAINING AI SERVER\logs\server_console.log</code> for the specific error. Text queries still work while Whisper is unavailable.</p>
+    </div>
+  </div>
+
+  <!-- E6 -->
+  <div class="warn-card">
+    <div class="warn-hdr"><span style="font-size:14pt">🟡</span><strong>Audio query transcribes wrong words or in the wrong language</strong></div>
+    <div class="warn-body">
+      <p><strong>Cause:</strong> Background noise, low microphone volume, or speaking too fast.</p>
+      <p><strong>Tips:</strong></p>
+      <ul style="margin: 8px 0 0 18px; color: #334155; font-size:10pt; line-height:1.8;">
+        <li>Speak clearly and at a moderate pace.</li>
+        <li>Hold the microphone closer to your mouth (especially on Meta Quest).</li>
+        <li>Reduce background noise — fans, air conditioning, other voices.</li>
+        <li>Check the <em>Idioma</em> badge in the response — if it shows the wrong language, Whisper auto-detected incorrectly. Switch to text mode for better control.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- E7 -->
+  <div class="err-card">
+    <div class="err-hdr"><span style="font-size:14pt">🟡</span><strong>Audio query takes very long (&gt; 30 s) or times out</strong></div>
+    <div class="err-body">
+      <p><strong>Cause A:</strong> First-ever audio query — Whisper model is being downloaded in the background. Let it finish (progress visible in server console).</p>
+      <p><strong>Cause B:</strong> Server is running on CPU with a large Whisper model. <code>medium</code> Whisper on CPU takes 5–15 seconds for transcription depending on recording length.</p>
+      <p><strong>Fix:</strong> Keep audio queries under 15 seconds of speech. For longer questions, use text mode.</p>
+    </div>
+  </div>
+
+  <!-- E8 -->
+  <div class="err-card">
+    <div class="err-hdr"><span style="font-size:14pt">🟡</span><strong>Microphone permission denied — browser blocked access</strong></div>
+    <div class="err-body">
+      <p><strong>Cause:</strong> Browser microphone permission was denied previously.</p>
+      <p><strong>Fix — Chrome / Edge:</strong> Click the lock icon in the address bar → Site settings → Microphone → Allow. Reload the page.</p>
+      <p><strong>Fix — Meta Quest browser:</strong> Settings → Privacy → Microphone → Allow for this site.</p>
+    </div>
+  </div>
+
+  <!-- QUICK REF -->
+  <h3 style="margin-top:24px;">Quick error reference</h3>
+  <table>
+    <thead><tr><th>Symptom</th><th>Most likely cause</th><th>Quick fix</th></tr></thead>
+    <tbody>
+      <tr><td>Yellow cert banner on connect</td><td>SSL cert not trusted</td><td>Open <code>/health</code> link, accept cert, reconnect</td></tr>
+      <tr><td>Fetch failed / timeout</td><td>Wrong IP or server not running</td><td>Check IP · Start server · Check firewall</td></tr>
+      <tr><td>Modelo LLM blank</td><td>No Ollama model installed</td><td>Download <code>phi4-mini</code> from launcher</td></tr>
+      <tr><td>No relevant information found</td><td>No PDFs indexed</td><td>Index a PDF via launcher → Browse → Index</td></tr>
+      <tr><td>Whisper STT "No cargado"</td><td>Download in progress or init error</td><td>Wait · check server log</td></tr>
+      <tr><td>Wrong transcription</td><td>Noise / speed / distance</td><td>Speak clearly, reduce noise</td></tr>
+      <tr><td>Audio query times out</td><td>First Whisper download or CPU slow</td><td>Wait for download · use short recordings</td></tr>
+      <tr><td>Microphone denied</td><td>Browser permission blocked</td><td>Allow mic in browser site settings</td></tr>
+    </tbody>
+  </table>
+
+</div>
+
+</div><!-- /content -->
+</body>
+</html>
